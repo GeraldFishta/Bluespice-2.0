@@ -1,3 +1,469 @@
+---
+description: MUI theme (light/dark), component patterns, responsive layout, DataGrid/DatePicker
+alwaysApply: false
+---
+
+# UI/UX Rules - Bluespice 2.0
+
+## Overview
+
+Material-UI (MUI) as primary UI library with centralized theme configuration, component reusability, and responsive design patterns for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. MUI as Foundation
+
+- Use Material-UI components as base building blocks
+- Extend MUI components rather than replacing them
+- Maintain MUI design system consistency
+- Leverage MUI's accessibility features
+- All mui override should be inside a dedicated file
+
+### 2. Theme as Single Source of Truth
+
+- Centralize all design tokens in theme configuration
+- Use theme values for colors, spacing, typography
+- Support dark/light mode switching
+- Customize MUI theme for Bluespice branding
+
+### 3. Component Hierarchy
+
+- Create reusable UI components in `/components/ui/`
+- Build business components in `/components/forms/`, `/components/layout/`
+- Follow atomic design principles
+- Maintain component composition over inheritance
+
+### 4. Responsive Design
+
+- Mobile-first approach
+- Use MUI breakpoints consistently
+- Implement responsive layouts with Grid/Stack
+- Test on multiple device sizes
+
+## Patterns & Examples
+
+### Theme Configuration
+
+```javascript
+// lib/theme.js
+import { createTheme } from "@mui/material/styles";
+
+const lightTheme = createTheme({
+  palette: {
+    mode: "light",
+    primary: {
+      main: "#1976d2",
+      light: "#42a5f5",
+      dark: "#1565c0",
+    },
+    secondary: {
+      main: "#dc004e",
+    },
+    background: {
+      default: "#f5f5f5",
+      paper: "#ffffff",
+    },
+    text: {
+      primary: "#212121",
+      secondary: "#757575",
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontSize: "2.5rem",
+      fontWeight: 500,
+    },
+    h2: {
+      fontSize: "2rem",
+      fontWeight: 500,
+    },
+    body1: {
+      fontSize: "1rem",
+      lineHeight: 1.5,
+    },
+  },
+  spacing: 8, // 8px base unit
+  shape: {
+    borderRadius: 8,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: "none",
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        },
+      },
+    },
+  },
+});
+
+const darkTheme = createTheme({
+  ...lightTheme,
+  palette: {
+    mode: "dark",
+    primary: {
+      main: "#90caf9",
+      light: "#e3f2fd",
+      dark: "#42a5f5",
+    },
+    background: {
+      default: "#121212",
+      paper: "#1e1e1e",
+    },
+    text: {
+      primary: "#ffffff",
+      secondary: "#b3b3b3",
+    },
+  },
+});
+
+export { lightTheme, darkTheme };
+```
+
+### Theme Provider Setup
+
+```javascript
+// app/layout.js
+"use client";
+import { ThemeProvider } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { lightTheme, darkTheme } from "@/lib/theme";
+import { useThemeMode } from "@/hooks/useThemeMode";
+
+export default function RootLayout({ children }) {
+  const { isDarkMode } = useThemeMode();
+  const theme = isDarkMode ? darkTheme : lightTheme;
+
+  return (
+    <html lang="en">
+      <body>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Reusable UI Components
+
+```javascript
+// components/ui/Button.js
+import { Button as MuiButton } from "@mui/material";
+import { styled } from "@mui/material/styles";
+
+const StyledButton = styled(MuiButton)(({ theme, variant, size }) => ({
+  minWidth: size === "small" ? 80 : size === "large" ? 120 : 100,
+  padding: theme.spacing(1, 2),
+  ...(variant === "primary" && {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    "&:hover": {
+      backgroundColor: theme.palette.primary.dark,
+    },
+  }),
+}));
+
+export const Button = ({
+  children,
+  variant = "primary",
+  size = "medium",
+  ...props
+}) => {
+  return (
+    <StyledButton variant={variant} size={size} {...props}>
+      {children}
+    </StyledButton>
+  );
+};
+```
+
+### Data Grid Patterns
+
+```javascript
+// components/ui/DataTable.js
+import { DataGrid } from "@mui/x-data-grid";
+import { Box, Paper } from "@mui/material";
+
+export const DataTable = ({
+  rows,
+  columns,
+  loading = false,
+  onRowClick,
+  ...props
+}) => {
+  return (
+    <Paper sx={{ height: 400, width: "100%" }}>
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        loading={loading}
+        pageSize={25}
+        rowsPerPageOptions={[25, 50, 100]}
+        checkboxSelection
+        disableSelectionOnClick
+        onRowClick={onRowClick}
+        sx={{
+          "& .MuiDataGrid-cell": {
+            borderBottom: "1px solid #e0e0e0",
+          },
+          "& .MuiDataGrid-columnHeaders": {
+            backgroundColor: "primary.main",
+            color: "primary.contrastText",
+          },
+        }}
+        {...props}
+      />
+    </Paper>
+  );
+};
+```
+
+### Form Components
+
+```javascript
+// components/forms/FormField.js
+import {
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from "@mui/material";
+import { Controller } from "react-hook-form";
+
+export const FormField = ({
+  name,
+  control,
+  label,
+  type = "text",
+  options = [],
+  required = false,
+  ...props
+}) => {
+  if (type === "select") {
+    return (
+      <Controller
+        name={name}
+        control={control}
+        render={({ field, fieldState: { error } }) => (
+          <FormControl fullWidth error={!!error}>
+            <InputLabel>{label}</InputLabel>
+            <Select {...field} label={label}>
+              {options.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+      />
+    );
+  }
+
+  return (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field, fieldState: { error } }) => (
+        <TextField
+          {...field}
+          label={label}
+          type={type}
+          fullWidth
+          required={required}
+          error={!!error}
+          helperText={error?.message}
+          {...props}
+        />
+      )}
+    />
+  );
+};
+```
+
+### Layout Components
+
+```javascript
+// components/layout/Sidebar.js
+import {
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+} from "@mui/material";
+import { useRouter } from "next/navigation";
+import { navigationRegistry } from "@/lib/navigation";
+
+export const Sidebar = ({ open, onClose }) => {
+  const router = useRouter();
+  const { user } = useAuth();
+
+  const handleNavigation = (path) => {
+    router.push(path);
+    onClose();
+  };
+
+  return (
+    <Drawer
+      variant="temporary"
+      open={open}
+      onClose={onClose}
+      sx={{
+        "& .MuiDrawer-paper": {
+          width: 240,
+        },
+      }}
+    >
+      <List>
+        {Object.entries(navigationRegistry)
+          .filter(([_, config]) =>
+            hasPermission(user?.role, config.permissions)
+          )
+          .map(([key, config]) => (
+            <ListItem
+              key={key}
+              button
+              onClick={() => handleNavigation(config.path)}
+            >
+              <ListItemIcon>
+                <config.icon />
+              </ListItemIcon>
+              <ListItemText primary={config.label} />
+            </ListItem>
+          ))}
+      </List>
+    </Drawer>
+  );
+};
+```
+
+### Responsive Layout
+
+```javascript
+// components/layout/ResponsiveContainer.js
+import { Container, Box, useMediaQuery, useTheme } from "@mui/material";
+
+export const ResponsiveContainer = ({ children, maxWidth = "lg" }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  return (
+    <Container maxWidth={maxWidth}>
+      <Box
+        sx={{
+          padding: isMobile ? theme.spacing(2) : theme.spacing(4),
+          minHeight: "100vh",
+        }}
+      >
+        {children}
+      </Box>
+    </Container>
+  );
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't hardcode colors
+const BadComponent = () => (
+  <div style={{ color: "#1976d2", backgroundColor: "#ffffff" }}>Content</div>
+);
+
+// Don't create components without theme integration
+const BadButton = () => (
+  <button style={{ padding: "8px 16px" }}>Click me</button>
+);
+
+// Don't ignore responsive design
+const BadLayout = () => (
+  <div style={{ width: "1200px", margin: "0 auto" }}>Content</div>
+);
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use theme colors
+const GoodComponent = () => (
+  <Box sx={{ color: "primary.main", backgroundColor: "background.paper" }}>
+    Content
+  </Box>
+);
+
+// Use MUI components with theme
+const GoodButton = () => (
+  <Button variant="contained" color="primary">
+    Click me
+  </Button>
+);
+
+// Use responsive design
+const GoodLayout = () => (
+  <Container maxWidth="lg">
+    <Box sx={{ width: "100%", margin: "0 auto" }}>Content</Box>
+  </Container>
+);
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "@mui/material": "^5.0.0",
+  "@mui/icons-material": "^5.0.0",
+  "@mui/x-data-grid": "^6.0.0",
+  "@mui/x-date-pickers": "^6.0.0",
+  "@emotion/react": "^11.0.0",
+  "@emotion/styled": "^11.0.0"
+}
+```
+
+### File Structure
+
+```
+lib/
+├── theme.js              # Theme configuration
+components/
+├── ui/                   # Reusable UI components
+│   ├── Button.js
+│   ├── DataTable.js
+│   └── FormField.js
+├── forms/                # Form-specific components
+├── layout/               # Layout components
+│   ├── Sidebar.js
+│   └── ResponsiveContainer.js
+hooks/
+├── useThemeMode.js       # Theme switching hook
+```
+
+### Theme Customization Guidelines
+
+1. **Colors**: Define primary, secondary, and semantic colors
+2. **Typography**: Set font families, sizes, and weights
+3. **Spacing**: Use 8px base unit for consistency
+4. **Shadows**: Define elevation levels
+5. **Border Radius**: Consistent corner rounding
+6. **Components**: Override MUI component styles as needed
+
 # UI/UX Rules - Bluespice 2.0
 
 ## Overview

@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: Supabase Auth, JWT storage/refresh, Axios interceptors, layout route guards, RBAC
+alwaysApply: false
 ---
 
 # Authentication Rules - Bluespice 2.0

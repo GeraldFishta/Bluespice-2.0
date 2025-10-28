@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: Navigation registry, permission-based rendering, layout guards, breadcrumbs, sidebar
+alwaysApply: false
 ---
 
 # Navigation Rules - Bluespice 2.0

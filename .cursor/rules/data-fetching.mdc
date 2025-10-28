@@ -1,4 +1,5 @@
 ---
+description: SWR for GET caching, Axios for mutations, JWT auto-attach, mutate() invalidation
 alwaysApply: false
 ---
 

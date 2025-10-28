@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: Code splitting, dynamic imports, memoization, Next/Image, bundle analysis, SWR tuning
+alwaysApply: false
 ---
 
 # Performance Rules - Bluespice 2.0

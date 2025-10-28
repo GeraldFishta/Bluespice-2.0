@@ -1,5 +1,5 @@
 ---
-description: State management
+description: Zustand for app state, SWR for server state, useState/useReducer patterns, state management
 alwaysApply: false
 ---
 
