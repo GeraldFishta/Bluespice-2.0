@@ -2,7 +2,7 @@
 -- Supabase PostgreSQL
 
 -- Enable necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 
 -- Users table (extends Supabase auth.users)
 CREATE TABLE profiles (
@@ -20,7 +20,7 @@ CREATE TABLE profiles (
 
 -- Employees table (detailed employee info)
 CREATE TABLE employees (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   employee_id TEXT UNIQUE NOT NULL, -- Company employee ID
   salary DECIMAL(10,2) NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE employees (
 
 -- Payroll periods
 CREATE TABLE payroll_periods (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE payroll_periods (
 
 -- Payroll records
 CREATE TABLE payroll_records (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
   payroll_period_id UUID REFERENCES payroll_periods(id) ON DELETE CASCADE,
   base_salary DECIMAL(10,2) NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE payroll_records (
 
 -- Timesheets
 CREATE TABLE timesheets (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
   payroll_period_id UUID REFERENCES payroll_periods(id) ON DELETE CASCADE,
   date DATE NOT NULL,
