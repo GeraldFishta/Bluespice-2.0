@@ -1,0 +1,1343 @@
+---
+alwaysApply: true
+---
+
+# Coding Principles - Bluespice 2.0
+
+## Overview
+
+Fundamental coding principles and best practices for maintaining clean, maintainable, and scalable code in the Bluespice payroll application.
+
+## Core Principles
+
+### 1. DRY (Don't Repeat Yourself)
+
+- Extract common logic into reusable functions/hooks
+- Create shared components for repeated UI patterns
+- Centralize configuration and constants
+- Use composition over duplication
+- Avoid copy-pasting code blocks
+
+### 2. KISS (Keep It Simple, Stupid)
+
+- Prefer simple solutions over complex ones
+- One component = one responsibility
+- Avoid over-engineering
+- Write code that's easy to understand
+- Choose readability over cleverness
+
+### 3. SOLID Principles
+
+- **S**ingle Responsibility: Each function/component has one job
+- **O**pen/Closed: Open for extension, closed for modification
+- **L**iskov Substitution: Subtypes must be substitutable for base types
+- **I**nterface Segregation: Many specific interfaces > one general interface
+- **D**ependency Inversion: Depend on abstractions, not concretions
+
+### 4. YAGNI (You Aren't Gonna Need It)
+
+- Don't implement features until they're actually needed
+- Avoid premature optimization
+- Keep code lean and focused
+- Refactor when requirements change
+
+### 5. Composition Over Inheritance
+
+- Use React composition patterns
+- Prefer hooks over class components
+- Build complex components from simple ones
+- Use render props and higher-order components when needed
+
+## Patterns & Examples
+
+### DRY Implementation
+
+```javascript
+// ❌ Bad: Repeated logic
+const EmployeeCard = ({ employee }) => {
+  const formatSalary = (salary) => {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+    }).format(salary);
+  };
+
+  return (
+    <Card>
+      <Typography>Salary: {formatSalary(employee.salary)}</Typography>
+    </Card>
+  );
+};
+
+const PayrollSummary = ({ payroll }) => {
+  const formatSalary = (salary) => {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+    }).format(salary);
+  };
+
+  return (
+    <Card>
+      <Typography>Total: {formatSalary(payroll.total)}</Typography>
+    </Card>
+  );
+};
+
+// ✅ Good: Extracted utility
+// utils/formatters.js
+export const formatCurrency = (amount) => {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  }).format(amount);
+};
+
+// components/EmployeeCard.js
+const EmployeeCard = ({ employee }) => (
+  <Card>
+    <Typography>Salary: {formatCurrency(employee.salary)}</Typography>
+  </Card>
+);
+
+// components/PayrollSummary.js
+const PayrollSummary = ({ payroll }) => (
+  <Card>
+    <Typography>Total: {formatCurrency(payroll.total)}</Typography>
+  </Card>
+);
+```
+
+### KISS Implementation
+
+```javascript
+// ❌ Bad: Over-engineered
+const EmployeeForm = ({ onSubmit, initialData }) => {
+  const [formData, setFormData] = useState(initialData);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitHistory, setSubmitHistory] = useState([]);
+  const [formVersion, setFormVersion] = useState(1);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const validationResult = await validateForm(formData);
+      if (validationResult.isValid) {
+        await onSubmit(formData);
+        setSubmitHistory((prev) => [
+          ...prev,
+          { data: formData, timestamp: Date.now() },
+        ]);
+        setFormVersion((prev) => prev + 1);
+      } else {
+        setValidationErrors(validationResult.errors);
+      }
+    } catch (error) {
+      console.error("Form submission error:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ... 50+ lines of complex logic
+};
+
+// ✅ Good: Simple and focused
+const EmployeeForm = ({ onSubmit, initialData }) => {
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    defaultValues: initialData,
+    resolver: yupResolver(employeeSchema),
+  });
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormField name="name" control={control} label="Name" />
+      <FormField name="email" control={control} label="Email" />
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Saving..." : "Save"}
+      </Button>
+    </form>
+  );
+};
+```
+
+### Single Responsibility Principle
+
+```javascript
+// ❌ Bad: Multiple responsibilities
+const EmployeeDashboard = () => {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Data fetching logic
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get("/employees");
+        setEmployees(response.data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
+  // Filtering logic
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) =>
+      emp.name.toLowerCase().includes(filter.toLowerCase())
+    );
+  }, [employees, filter]);
+
+  // Sorting logic
+  const sortedEmployees = useMemo(() => {
+    return [...filteredEmployees].sort((a, b) =>
+      a[sortBy].localeCompare(b[sortBy])
+    );
+  }, [filteredEmployees, sortBy]);
+
+  // Pagination logic
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * 10;
+    return sortedEmployees.slice(start, start + 10);
+  }, [sortedEmployees, currentPage]);
+
+  // UI rendering
+  return (
+    <div>
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter employees..."
+      />
+      <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+        <option value="name">Name</option>
+        <option value="department">Department</option>
+      </select>
+      {loading && <div>Loading...</div>}
+      {error && <div>Error: {error}</div>}
+      {paginatedEmployees.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+      <Pagination
+        current={currentPage}
+        total={sortedEmployees.length}
+        onChange={setCurrentPage}
+      />
+    </div>
+  );
+};
+
+// ✅ Good: Separated responsibilities
+// hooks/useEmployees.js
+export const useEmployees = () => {
+  const {
+    data: employees,
+    error,
+    isLoading,
+  } = useSWR("/api/employees", fetcher);
+  return { employees, error, isLoading };
+};
+
+// hooks/useEmployeeFilters.js
+export const useEmployeeFilters = (employees) => {
+  const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+
+  const filteredAndSorted = useMemo(() => {
+    const filtered =
+      employees?.filter((emp) =>
+        emp.name.toLowerCase().includes(filter.toLowerCase())
+      ) || [];
+
+    return [...filtered].sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
+  }, [employees, filter, sortBy]);
+
+  return {
+    filter,
+    setFilter,
+    sortBy,
+    setSortBy,
+    filteredEmployees: filteredAndSorted,
+  };
+};
+
+// components/EmployeeDashboard.js
+const EmployeeDashboard = () => {
+  const { employees, error, isLoading } = useEmployees();
+  const { filter, setFilter, sortBy, setSortBy, filteredEmployees } =
+    useEmployeeFilters(employees);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return (
+    <div>
+      <EmployeeFilters
+        filter={filter}
+        setFilter={setFilter}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+      />
+      <EmployeeList employees={filteredEmployees} />
+    </div>
+  );
+};
+```
+
+### Composition Over Inheritance
+
+```javascript
+// ❌ Bad: Inheritance-like pattern
+const BaseForm = ({ children, onSubmit }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (data) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {children}
+      <Button type="submit" disabled={isSubmitting}>
+        Submit
+      </Button>
+    </form>
+  );
+};
+
+const EmployeeForm = () => (
+  <BaseForm onSubmit={addEmployee}>
+    <TextField name="name" />
+    <TextField name="email" />
+  </BaseForm>
+);
+
+// ✅ Good: Composition pattern
+const useFormSubmission = (onSubmit) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (data) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return { handleSubmit, isSubmitting };
+};
+
+const FormWrapper = ({ children, onSubmit }) => {
+  const { handleSubmit, isSubmitting } = useFormSubmission(onSubmit);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {children}
+      <Button type="submit" disabled={isSubmitting}>
+        Submit
+      </Button>
+    </form>
+  );
+};
+
+const EmployeeForm = () => (
+  <FormWrapper onSubmit={addEmployee}>
+    <TextField name="name" />
+    <TextField name="email" />
+  </FormWrapper>
+);
+```
+
+### YAGNI Implementation
+
+```javascript
+// ❌ Bad: Premature optimization
+const EmployeeList = ({ employees }) => {
+  // Implementing complex virtualization before we know if we need it
+  const [virtualizedItems, setVirtualizedItems] = useState([]);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [itemHeight, setItemHeight] = useState(50);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  useEffect(() => {
+    // Complex virtualization logic for 10-20 items
+    const visibleCount = Math.ceil(containerHeight / itemHeight);
+    const startIndex = Math.floor(scrollTop / itemHeight);
+    const endIndex = Math.min(startIndex + visibleCount, employees.length);
+
+    setVirtualizedItems(employees.slice(startIndex, endIndex));
+  }, [employees, containerHeight, itemHeight, scrollTop]);
+
+  return (
+    <div onScroll={(e) => setScrollTop(e.target.scrollTop)}>
+      {virtualizedItems.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+    </div>
+  );
+};
+
+// ✅ Good: Simple until proven otherwise
+const EmployeeList = ({ employees }) => {
+  return (
+    <div>
+      {employees.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+    </div>
+  );
+};
+
+// Add virtualization only when you have 100+ items and performance issues
+```
+
+## Best Practices
+
+### 1. Naming Conventions
+
+```javascript
+// ✅ Good naming
+const useEmployeeData = () => {
+  /* ... */
+};
+const EmployeeCard = ({ employee }) => {
+  /* ... */
+};
+const formatCurrency = (amount) => {
+  /* ... */
+};
+const EMPLOYEE_ROLES = ["admin", "hr", "employee"];
+
+// ❌ Bad naming
+const useData = () => {
+  /* ... */
+};
+const Card = ({ data }) => {
+  /* ... */
+};
+const format = (x) => {
+  /* ... */
+};
+const roles = ["admin", "hr", "employee"];
+```
+
+### 2. Function Purity
+
+```javascript
+// ✅ Pure function
+const calculatePayrollTotal = (payrollItems) => {
+  return payrollItems.reduce((total, item) => total + item.amount, 0);
+};
+
+// ❌ Impure function
+let total = 0;
+const calculatePayrollTotal = (payrollItems) => {
+  total = 0; // Side effect
+  payrollItems.forEach((item) => {
+    total += item.amount; // Mutating external variable
+  });
+  return total;
+};
+```
+
+### 3. Error Handling
+
+```javascript
+// ✅ Good error handling
+const fetchEmployee = async (id) => {
+  try {
+    const response = await api.get(`/employees/${id}`);
+    return { data: response.data, error: null };
+  } catch (error) {
+    console.error("Failed to fetch employee:", error);
+    return { data: null, error: error.message };
+  }
+};
+
+// ❌ Bad error handling
+const fetchEmployee = async (id) => {
+  const response = await api.get(`/employees/${id}`);
+  return response.data; // Will throw if error occurs
+};
+```
+
+### 4. Immutability
+
+```javascript
+// ✅ Immutable updates
+const addEmployee = (employees, newEmployee) => {
+  return [...employees, newEmployee];
+};
+
+const updateEmployee = (employees, id, updates) => {
+  return employees.map((emp) => (emp.id === id ? { ...emp, ...updates } : emp));
+};
+
+// ❌ Mutable updates
+const addEmployee = (employees, newEmployee) => {
+  employees.push(newEmployee); // Mutates original array
+  return employees;
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't create god components
+const EmployeeManagementSystem = () => {
+  // 500+ lines of code handling everything
+  // Authentication, data fetching, UI, business logic, etc.
+};
+
+// Don't use magic numbers
+const EmployeeCard = ({ employee }) => (
+  <Card style={{ width: 300, height: 200, margin: 16 }}>
+    {/* Magic numbers everywhere */}
+  </Card>
+);
+
+// Don't ignore error states
+const EmployeeList = () => {
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    fetchEmployees().then(setEmployees); // No error handling
+  }, []);
+
+  return employees.map((emp) => <EmployeeCard key={emp.id} employee={emp} />);
+};
+
+// Don't create unnecessary abstractions
+const useEmployeeName = (employee) => {
+  return employee.name; // Over-abstraction
+};
+
+// Don't mix concerns
+const EmployeeForm = () => {
+  const [employees, setEmployees] = useState([]); // Data management
+  const [formData, setFormData] = useState({}); // Form state
+  const [auth, setAuth] = useState(null); // Auth state
+
+  // All mixed together
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Create focused components
+const EmployeeCard = ({ employee }) => {
+  /* ... */
+};
+const EmployeeList = ({ employees }) => {
+  /* ... */
+};
+const EmployeeForm = ({ onSubmit }) => {
+  /* ... */
+};
+
+// Use constants and theme values
+const EmployeeCard = ({ employee }) => (
+  <Card
+    sx={{
+      width: theme.spacing(37.5), // 300px
+      height: theme.spacing(25), // 200px
+      margin: theme.spacing(2), // 16px
+    }}
+  >
+    {/* Consistent spacing */}
+  </Card>
+);
+
+// Handle all states
+const EmployeeList = () => {
+  const { employees, error, isLoading } = useEmployees();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return employees.map((emp) => <EmployeeCard key={emp.id} employee={emp} />);
+};
+
+// Use direct access when appropriate
+const EmployeeCard = ({ employee }) => (
+  <Typography>{employee.name}</Typography> // Direct access is fine
+);
+
+// Separate concerns
+const useEmployees = () => {
+  /* Data management */
+};
+const useEmployeeForm = () => {
+  /* Form state */
+};
+const useAuth = () => {
+  /* Auth state */
+};
+```
+
+## Code Quality Checklist
+
+### Before Committing
+
+- [ ] **DRY**: No repeated code blocks
+- [ ] **KISS**: Solution is as simple as possible
+- [ ] **Single Responsibility**: Each function/component has one job
+- [ ] **Naming**: Names clearly express intent
+- [ ] **Error Handling**: All error cases covered
+- [ ] **Testing**: Critical paths tested
+- [ ] **Performance**: No unnecessary re-renders/calculations
+- [ ] **Accessibility**: ARIA labels and keyboard navigation
+- [ ] **Documentation**: Complex logic documented
+
+### Code Review Focus
+
+- [ ] **Readability**: Can a junior developer understand this?
+- [ ] **Maintainability**: Easy to modify and extend?
+- [ ] **Reusability**: Can this be reused elsewhere?
+- [ ] **Performance**: Any performance implications?
+- [ ] **Security**: Any security vulnerabilities?
+- [ ] **Consistency**: Follows project conventions?
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "react": "^18.0.0",
+  "react-dom": "^18.0.0",
+  "next": "^14.0.0",
+  "@types/react": "^18.0.0",
+  "@types/node": "^20.0.0"
+}
+```
+
+### File Structure
+
+```
+src/
+├── components/           # Reusable components
+│   ├── ui/              # Basic UI components
+│   ├── forms/           # Form components
+│   └── layout/          # Layout components
+├── hooks/               # Custom hooks
+├── utils/               # Utility functions
+├── constants/           # Application constants
+├── types/               # TypeScript definitions
+└── lib/                 # External library configurations
+```
+
+### Tools Integration
+
+1. **ESLint**: Enforce coding standards
+2. **Prettier**: Consistent code formatting
+3. **Husky**: Pre-commit hooks
+4. **Jest**: Unit testing
+5. **Storybook**: Component documentation
+
+## Principles Summary
+
+1. **DRY**: Extract common patterns into reusable utilities
+2. **KISS**: Choose simplicity over complexity
+3. **SOLID**: Follow object-oriented design principles
+4. **YAGNI**: Don't implement until needed
+5. **Composition**: Build complex from simple parts
+6. **Immutability**: Don't mutate data structures
+7. **Error Handling**: Handle all error cases gracefully
+8. **Testing**: Test critical business logic
+9. **Documentation**: Document complex decisions
+10. **Consistency**: Follow established patterns
+
+# Coding Principles - Bluespice 2.0
+
+## Overview
+
+Fundamental coding principles and best practices for maintaining clean, maintainable, and scalable code in the Bluespice payroll application.
+
+## Core Principles
+
+### 1. DRY (Don't Repeat Yourself)
+
+- Extract common logic into reusable functions/hooks
+- Create shared components for repeated UI patterns
+- Centralize configuration and constants
+- Use composition over duplication
+- Avoid copy-pasting code blocks
+
+### 2. KISS (Keep It Simple, Stupid)
+
+- Prefer simple solutions over complex ones
+- One component = one responsibility
+- Avoid over-engineering
+- Write code that's easy to understand
+- Choose readability over cleverness
+
+### 3. SOLID Principles
+
+- **S**ingle Responsibility: Each function/component has one job
+- **O**pen/Closed: Open for extension, closed for modification
+- **L**iskov Substitution: Subtypes must be substitutable for base types
+- **I**nterface Segregation: Many specific interfaces > one general interface
+- **D**ependency Inversion: Depend on abstractions, not concretions
+
+### 4. YAGNI (You Aren't Gonna Need It)
+
+- Don't implement features until they're actually needed
+- Avoid premature optimization
+- Keep code lean and focused
+- Refactor when requirements change
+
+### 5. Composition Over Inheritance
+
+- Use React composition patterns
+- Prefer hooks over class components
+- Build complex components from simple ones
+- Use render props and higher-order components when needed
+
+## Patterns & Examples
+
+### DRY Implementation
+
+```javascript
+// ❌ Bad: Repeated logic
+const EmployeeCard = ({ employee }) => {
+  const formatSalary = (salary) => {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+    }).format(salary);
+  };
+
+  return (
+    <Card>
+      <Typography>Salary: {formatSalary(employee.salary)}</Typography>
+    </Card>
+  );
+};
+
+const PayrollSummary = ({ payroll }) => {
+  const formatSalary = (salary) => {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+    }).format(salary);
+  };
+
+  return (
+    <Card>
+      <Typography>Total: {formatSalary(payroll.total)}</Typography>
+    </Card>
+  );
+};
+
+// ✅ Good: Extracted utility
+// utils/formatters.js
+export const formatCurrency = (amount) => {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  }).format(amount);
+};
+
+// components/EmployeeCard.js
+const EmployeeCard = ({ employee }) => (
+  <Card>
+    <Typography>Salary: {formatCurrency(employee.salary)}</Typography>
+  </Card>
+);
+
+// components/PayrollSummary.js
+const PayrollSummary = ({ payroll }) => (
+  <Card>
+    <Typography>Total: {formatCurrency(payroll.total)}</Typography>
+  </Card>
+);
+```
+
+### KISS Implementation
+
+```javascript
+// ❌ Bad: Over-engineered
+const EmployeeForm = ({ onSubmit, initialData }) => {
+  const [formData, setFormData] = useState(initialData);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitHistory, setSubmitHistory] = useState([]);
+  const [formVersion, setFormVersion] = useState(1);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const validationResult = await validateForm(formData);
+      if (validationResult.isValid) {
+        await onSubmit(formData);
+        setSubmitHistory((prev) => [
+          ...prev,
+          { data: formData, timestamp: Date.now() },
+        ]);
+        setFormVersion((prev) => prev + 1);
+      } else {
+        setValidationErrors(validationResult.errors);
+      }
+    } catch (error) {
+      console.error("Form submission error:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ... 50+ lines of complex logic
+};
+
+// ✅ Good: Simple and focused
+const EmployeeForm = ({ onSubmit, initialData }) => {
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    defaultValues: initialData,
+    resolver: yupResolver(employeeSchema),
+  });
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormField name="name" control={control} label="Name" />
+      <FormField name="email" control={control} label="Email" />
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Saving..." : "Save"}
+      </Button>
+    </form>
+  );
+};
+```
+
+### Single Responsibility Principle
+
+```javascript
+// ❌ Bad: Multiple responsibilities
+const EmployeeDashboard = () => {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Data fetching logic
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get("/employees");
+        setEmployees(response.data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
+  // Filtering logic
+  const filteredEmployees = useMemo(() => {
+    return employees.filter((emp) =>
+      emp.name.toLowerCase().includes(filter.toLowerCase())
+    );
+  }, [employees, filter]);
+
+  // Sorting logic
+  const sortedEmployees = useMemo(() => {
+    return [...filteredEmployees].sort((a, b) =>
+      a[sortBy].localeCompare(b[sortBy])
+    );
+  }, [filteredEmployees, sortBy]);
+
+  // Pagination logic
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * 10;
+    return sortedEmployees.slice(start, start + 10);
+  }, [sortedEmployees, currentPage]);
+
+  // UI rendering
+  return (
+    <div>
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter employees..."
+      />
+      <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+        <option value="name">Name</option>
+        <option value="department">Department</option>
+      </select>
+      {loading && <div>Loading...</div>}
+      {error && <div>Error: {error}</div>}
+      {paginatedEmployees.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+      <Pagination
+        current={currentPage}
+        total={sortedEmployees.length}
+        onChange={setCurrentPage}
+      />
+    </div>
+  );
+};
+
+// ✅ Good: Separated responsibilities
+// hooks/useEmployees.js
+export const useEmployees = () => {
+  const {
+    data: employees,
+    error,
+    isLoading,
+  } = useSWR("/api/employees", fetcher);
+  return { employees, error, isLoading };
+};
+
+// hooks/useEmployeeFilters.js
+export const useEmployeeFilters = (employees) => {
+  const [filter, setFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name");
+
+  const filteredAndSorted = useMemo(() => {
+    const filtered =
+      employees?.filter((emp) =>
+        emp.name.toLowerCase().includes(filter.toLowerCase())
+      ) || [];
+
+    return [...filtered].sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
+  }, [employees, filter, sortBy]);
+
+  return {
+    filter,
+    setFilter,
+    sortBy,
+    setSortBy,
+    filteredEmployees: filteredAndSorted,
+  };
+};
+
+// components/EmployeeDashboard.js
+const EmployeeDashboard = () => {
+  const { employees, error, isLoading } = useEmployees();
+  const { filter, setFilter, sortBy, setSortBy, filteredEmployees } =
+    useEmployeeFilters(employees);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return (
+    <div>
+      <EmployeeFilters
+        filter={filter}
+        setFilter={setFilter}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+      />
+      <EmployeeList employees={filteredEmployees} />
+    </div>
+  );
+};
+```
+
+### Composition Over Inheritance
+
+```javascript
+// ❌ Bad: Inheritance-like pattern
+const BaseForm = ({ children, onSubmit }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (data) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {children}
+      <Button type="submit" disabled={isSubmitting}>
+        Submit
+      </Button>
+    </form>
+  );
+};
+
+const EmployeeForm = () => (
+  <BaseForm onSubmit={addEmployee}>
+    <TextField name="name" />
+    <TextField name="email" />
+  </BaseForm>
+);
+
+// ✅ Good: Composition pattern
+const useFormSubmission = (onSubmit) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (data) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return { handleSubmit, isSubmitting };
+};
+
+const FormWrapper = ({ children, onSubmit }) => {
+  const { handleSubmit, isSubmitting } = useFormSubmission(onSubmit);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {children}
+      <Button type="submit" disabled={isSubmitting}>
+        Submit
+      </Button>
+    </form>
+  );
+};
+
+const EmployeeForm = () => (
+  <FormWrapper onSubmit={addEmployee}>
+    <TextField name="name" />
+    <TextField name="email" />
+  </FormWrapper>
+);
+```
+
+### YAGNI Implementation
+
+```javascript
+// ❌ Bad: Premature optimization
+const EmployeeList = ({ employees }) => {
+  // Implementing complex virtualization before we know if we need it
+  const [virtualizedItems, setVirtualizedItems] = useState([]);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [itemHeight, setItemHeight] = useState(50);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  useEffect(() => {
+    // Complex virtualization logic for 10-20 items
+    const visibleCount = Math.ceil(containerHeight / itemHeight);
+    const startIndex = Math.floor(scrollTop / itemHeight);
+    const endIndex = Math.min(startIndex + visibleCount, employees.length);
+
+    setVirtualizedItems(employees.slice(startIndex, endIndex));
+  }, [employees, containerHeight, itemHeight, scrollTop]);
+
+  return (
+    <div onScroll={(e) => setScrollTop(e.target.scrollTop)}>
+      {virtualizedItems.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+    </div>
+  );
+};
+
+// ✅ Good: Simple until proven otherwise
+const EmployeeList = ({ employees }) => {
+  return (
+    <div>
+      {employees.map((employee) => (
+        <EmployeeCard key={employee.id} employee={employee} />
+      ))}
+    </div>
+  );
+};
+
+// Add virtualization only when you have 100+ items and performance issues
+```
+
+## Best Practices
+
+### 1. Naming Conventions
+
+```javascript
+// ✅ Good naming
+const useEmployeeData = () => {
+  /* ... */
+};
+const EmployeeCard = ({ employee }) => {
+  /* ... */
+};
+const formatCurrency = (amount) => {
+  /* ... */
+};
+const EMPLOYEE_ROLES = ["admin", "hr", "employee"];
+
+// ❌ Bad naming
+const useData = () => {
+  /* ... */
+};
+const Card = ({ data }) => {
+  /* ... */
+};
+const format = (x) => {
+  /* ... */
+};
+const roles = ["admin", "hr", "employee"];
+```
+
+### 2. Function Purity
+
+```javascript
+// ✅ Pure function
+const calculatePayrollTotal = (payrollItems) => {
+  return payrollItems.reduce((total, item) => total + item.amount, 0);
+};
+
+// ❌ Impure function
+let total = 0;
+const calculatePayrollTotal = (payrollItems) => {
+  total = 0; // Side effect
+  payrollItems.forEach((item) => {
+    total += item.amount; // Mutating external variable
+  });
+  return total;
+};
+```
+
+### 3. Error Handling
+
+```javascript
+// ✅ Good error handling
+const fetchEmployee = async (id) => {
+  try {
+    const response = await api.get(`/employees/${id}`);
+    return { data: response.data, error: null };
+  } catch (error) {
+    console.error("Failed to fetch employee:", error);
+    return { data: null, error: error.message };
+  }
+};
+
+// ❌ Bad error handling
+const fetchEmployee = async (id) => {
+  const response = await api.get(`/employees/${id}`);
+  return response.data; // Will throw if error occurs
+};
+```
+
+### 4. Immutability
+
+```javascript
+// ✅ Immutable updates
+const addEmployee = (employees, newEmployee) => {
+  return [...employees, newEmployee];
+};
+
+const updateEmployee = (employees, id, updates) => {
+  return employees.map((emp) => (emp.id === id ? { ...emp, ...updates } : emp));
+};
+
+// ❌ Mutable updates
+const addEmployee = (employees, newEmployee) => {
+  employees.push(newEmployee); // Mutates original array
+  return employees;
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't create god components
+const EmployeeManagementSystem = () => {
+  // 500+ lines of code handling everything
+  // Authentication, data fetching, UI, business logic, etc.
+};
+
+// Don't use magic numbers
+const EmployeeCard = ({ employee }) => (
+  <Card style={{ width: 300, height: 200, margin: 16 }}>
+    {/* Magic numbers everywhere */}
+  </Card>
+);
+
+// Don't ignore error states
+const EmployeeList = () => {
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => {
+    fetchEmployees().then(setEmployees); // No error handling
+  }, []);
+
+  return employees.map((emp) => <EmployeeCard key={emp.id} employee={emp} />);
+};
+
+// Don't create unnecessary abstractions
+const useEmployeeName = (employee) => {
+  return employee.name; // Over-abstraction
+};
+
+// Don't mix concerns
+const EmployeeForm = () => {
+  const [employees, setEmployees] = useState([]); // Data management
+  const [formData, setFormData] = useState({}); // Form state
+  const [auth, setAuth] = useState(null); // Auth state
+
+  // All mixed together
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Create focused components
+const EmployeeCard = ({ employee }) => {
+  /* ... */
+};
+const EmployeeList = ({ employees }) => {
+  /* ... */
+};
+const EmployeeForm = ({ onSubmit }) => {
+  /* ... */
+};
+
+// Use constants and theme values
+const EmployeeCard = ({ employee }) => (
+  <Card
+    sx={{
+      width: theme.spacing(37.5), // 300px
+      height: theme.spacing(25), // 200px
+      margin: theme.spacing(2), // 16px
+    }}
+  >
+    {/* Consistent spacing */}
+  </Card>
+);
+
+// Handle all states
+const EmployeeList = () => {
+  const { employees, error, isLoading } = useEmployees();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return employees.map((emp) => <EmployeeCard key={emp.id} employee={emp} />);
+};
+
+// Use direct access when appropriate
+const EmployeeCard = ({ employee }) => (
+  <Typography>{employee.name}</Typography> // Direct access is fine
+);
+
+// Separate concerns
+const useEmployees = () => {
+  /* Data management */
+};
+const useEmployeeForm = () => {
+  /* Form state */
+};
+const useAuth = () => {
+  /* Auth state */
+};
+```
+
+## Code Quality Checklist
+
+### Before Committing
+
+- [ ] **DRY**: No repeated code blocks
+- [ ] **KISS**: Solution is as simple as possible
+- [ ] **Single Responsibility**: Each function/component has one job
+- [ ] **Naming**: Names clearly express intent
+- [ ] **Error Handling**: All error cases covered
+- [ ] **Testing**: Critical paths tested
+- [ ] **Performance**: No unnecessary re-renders/calculations
+- [ ] **Accessibility**: ARIA labels and keyboard navigation
+- [ ] **Documentation**: Complex logic documented
+
+### Code Review Focus
+
+- [ ] **Readability**: Can a junior developer understand this?
+- [ ] **Maintainability**: Easy to modify and extend?
+- [ ] **Reusability**: Can this be reused elsewhere?
+- [ ] **Performance**: Any performance implications?
+- [ ] **Security**: Any security vulnerabilities?
+- [ ] **Consistency**: Follows project conventions?
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "react": "^18.0.0",
+  "react-dom": "^18.0.0",
+  "next": "^14.0.0",
+  "@types/react": "^18.0.0",
+  "@types/node": "^20.0.0"
+}
+```
+
+### File Structure
+
+```
+src/
+├── components/           # Reusable components
+│   ├── ui/              # Basic UI components
+│   ├── forms/           # Form components
+│   └── layout/          # Layout components
+├── hooks/               # Custom hooks
+├── utils/               # Utility functions
+├── constants/           # Application constants
+├── types/               # TypeScript definitions
+└── lib/                 # External library configurations
+```
+
+### Tools Integration
+
+1. **ESLint**: Enforce coding standards
+2. **Prettier**: Consistent code formatting
+3. **Husky**: Pre-commit hooks
+4. **Jest**: Unit testing
+5. **Storybook**: Component documentation
+
+## Principles Summary
+
+1. **DRY**: Extract common patterns into reusable utilities
+2. **KISS**: Choose simplicity over complexity
+3. **SOLID**: Follow object-oriented design principles
+4. **YAGNI**: Don't implement until needed
+5. **Composition**: Build complex from simple parts
+6. **Immutability**: Don't mutate data structures
+7. **Error Handling**: Handle all error cases gracefully
+8. **Testing**: Test critical business logic
+9. **Documentation**: Document complex decisions
+10. **Consistency**: Follow established patterns

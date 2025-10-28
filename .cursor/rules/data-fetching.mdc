@@ -1,0 +1,905 @@
+---
+alwaysApply: false
+---
+
+# Data Fetching Rules - Bluespice 2.0
+
+## Overview
+
+SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pessimistic updates, and centralized error handling for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. SWR for GET Operations
+
+- Use SWR exclusively for data fetching and caching
+- Configure SWR globally for consistent behavior
+- Implement automatic revalidation strategies
+- Handle loading and error states uniformly
+
+### 2. Axios for Mutations
+
+- Use Axios for all POST, PUT, DELETE operations
+- Auto-attach JWT tokens via interceptors
+- Implement pessimistic updates (no optimistic)
+- Invalidate SWR cache after successful mutations
+
+### 3. Cache Management
+
+- Use `mutate()` to invalidate cache after mutations
+- Implement selective cache invalidation
+- Avoid optimistic updates for payroll data
+- Handle cache consistency across components
+
+### 4. Error Handling
+
+- Centralized error handling with toast notifications
+- Consistent error response format
+- Graceful degradation for network failures
+- User-friendly error messages
+
+## Patterns & Examples
+
+### SWR Configuration
+
+```javascript
+// lib/swr-config.js
+import { SWRConfig } from "swr";
+
+const swrConfig = {
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+  dedupingInterval: 2000,
+  errorRetryCount: 3,
+  errorRetryInterval: 5000,
+  onError: (error) => {
+    console.error("SWR Error:", error);
+    // Global error handling
+  },
+  fetcher: async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+    return response.json();
+  },
+};
+
+export const SWRProvider = ({ children }) => {
+  return <SWRConfig value={swrConfig}>{children}</SWRConfig>;
+};
+```
+
+### Custom Data Fetching Hooks
+
+```javascript
+// hooks/useEmployees.js
+import useSWR from "swr";
+import api from "@/lib/axios";
+import { mutate } from "swr";
+
+const fetcher = (url) => api.get(url).then((res) => res.data);
+
+export const useEmployees = () => {
+  const { data, error, isLoading } = useSWR("/api/employees", fetcher);
+
+  const addEmployee = async (employeeData) => {
+    try {
+      await api.post("/api/employees", employeeData);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateEmployee = async (id, data) => {
+    try {
+      await api.put(`/api/employees/${id}`, data);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteEmployee = async (id) => {
+    try {
+      await api.delete(`/api/employees/${id}`);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  return {
+    employees: data,
+    isLoading,
+    error,
+    addEmployee,
+    updateEmployee,
+    deleteEmployee,
+  };
+};
+```
+
+### Payroll Data Hook
+
+```javascript
+// hooks/usePayroll.js
+import useSWR from "swr";
+import api from "@/lib/axios";
+import { mutate } from "swr";
+
+export const usePayroll = (payPeriod) => {
+  const key = payPeriod ? `/api/payroll/${payPeriod}` : null;
+  const { data, error, isLoading } = useSWR(key, fetcher);
+
+  const generatePayroll = async (payPeriodData) => {
+    try {
+      await api.post("/api/payroll/generate", payPeriodData);
+      mutate("/api/payroll"); // Invalidate payroll list
+      mutate(key); // Invalidate specific payroll
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const approvePayroll = async (payrollId) => {
+    try {
+      await api.put(`/api/payroll/${payrollId}/approve`);
+      mutate(key); // Re-fetch specific payroll
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  return {
+    payroll: data,
+    isLoading,
+    error,
+    generatePayroll,
+    approvePayroll,
+  };
+};
+```
+
+### Axios Configuration with JWT
+
+```javascript
+// lib/axios.js
+import axios from "axios";
+import { getStoredToken, validateJWT, clearStoredToken } from "./auth";
+
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor for JWT
+api.interceptors.request.use(
+  (config) => {
+    const token = getStoredToken();
+    if (token && validateJWT(token)) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      clearStoredToken();
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status >= 500) {
+      // Server error - show generic message
+      console.error("Server Error:", error.response.data);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+```
+
+### Error Handling with Toast
+
+```javascript
+// hooks/useApiError.js
+import { toast } from "react-toastify";
+
+export const useApiError = () => {
+  const handleError = (error, customMessage) => {
+    let message = customMessage || "An error occurred";
+
+    if (error.response) {
+      // Server responded with error status
+      const { status, data } = error.response;
+
+      switch (status) {
+        case 400:
+          message = data.message || "Invalid request";
+          break;
+        case 401:
+          message = "Unauthorized access";
+          break;
+        case 403:
+          message = "Access forbidden";
+          break;
+        case 404:
+          message = "Resource not found";
+          break;
+        case 422:
+          message = data.message || "Validation error";
+          break;
+        case 500:
+          message = "Server error occurred";
+          break;
+        default:
+          message = data.message || "An error occurred";
+      }
+    } else if (error.request) {
+      // Network error
+      message = "Network error - please check your connection";
+    }
+
+    toast.error(message);
+  };
+
+  const handleSuccess = (message) => {
+    toast.success(message);
+  };
+
+  return { handleError, handleSuccess };
+};
+```
+
+### Cache Invalidation Patterns
+
+```javascript
+// utils/cache-invalidation.js
+import { mutate } from "swr";
+
+// Invalidate specific cache
+export const invalidateCache = (key) => {
+  mutate(key);
+};
+
+// Invalidate multiple related caches
+export const invalidateEmployeeCaches = () => {
+  mutate("/api/employees");
+  mutate("/api/employees/stats");
+  mutate("/api/departments"); // If departments depend on employees
+};
+
+// Invalidate all caches (use sparingly)
+export const invalidateAllCaches = () => {
+  mutate(() => true);
+};
+
+// Selective invalidation based on data
+export const invalidatePayrollCaches = (payPeriod) => {
+  mutate("/api/payroll");
+  mutate(`/api/payroll/${payPeriod}`);
+  mutate("/api/payroll/summary");
+};
+```
+
+### Loading States Management
+
+```javascript
+// hooks/useLoadingStates.js
+import { useState } from "react";
+
+export const useLoadingStates = () => {
+  const [loadingStates, setLoadingStates] = useState({});
+
+  const setLoading = (key, isLoading) => {
+    setLoadingStates((prev) => ({
+      ...prev,
+      [key]: isLoading,
+    }));
+  };
+
+  const isLoading = (key) => {
+    return loadingStates[key] || false;
+  };
+
+  const withLoading = async (key, asyncFn) => {
+    setLoading(key, true);
+    try {
+      const result = await asyncFn();
+      return result;
+    } finally {
+      setLoading(key, false);
+    }
+  };
+
+  return { setLoading, isLoading, withLoading };
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't use optimistic updates for payroll data
+const BadUpdateEmployee = async (id, data) => {
+  // Optimistically update UI
+  setEmployees((prev) =>
+    prev.map((emp) => (emp.id === id ? { ...emp, ...data } : emp))
+  );
+
+  try {
+    await api.put(`/api/employees/${id}`, data);
+  } catch (error) {
+    // Rollback on error - complex and error-prone
+    setEmployees(originalEmployees);
+  }
+};
+
+// Don't ignore cache invalidation
+const BadAddEmployee = async (employeeData) => {
+  await api.post("/api/employees", employeeData);
+  // Missing mutate() - cache becomes stale
+};
+
+// Don't mix fetch and axios
+const BadDataFetching = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/employees") // Inconsistent with axios usage
+      .then((res) => res.json())
+      .then(setData);
+  }, []);
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use pessimistic updates
+const GoodUpdateEmployee = async (id, data) => {
+  try {
+    await api.put(`/api/employees/${id}`, data);
+    mutate("/api/employees"); // Re-fetch after success
+    toast.success("Employee updated successfully");
+  } catch (error) {
+    toast.error("Failed to update employee");
+  }
+};
+
+// Always invalidate cache
+const GoodAddEmployee = async (employeeData) => {
+  try {
+    await api.post("/api/employees", employeeData);
+    mutate("/api/employees"); // Keep cache fresh
+    toast.success("Employee added successfully");
+  } catch (error) {
+    toast.error("Failed to add employee");
+  }
+};
+
+// Use consistent data fetching
+const GoodDataFetching = () => {
+  const { employees, isLoading, error } = useEmployees();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return <EmployeeList employees={employees} />;
+};
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "swr": "^2.0.0",
+  "axios": "^1.0.0",
+  "react-toastify": "^9.0.0"
+}
+```
+
+### File Structure
+
+```
+lib/
+├── swr-config.js         # SWR global configuration
+├── axios.js              # Axios instance with interceptors
+hooks/
+├── useEmployees.js       # Employee data hook
+├── usePayroll.js         # Payroll data hook
+├── useApiError.js        # Error handling hook
+├── useLoadingStates.js   # Loading states hook
+utils/
+├── cache-invalidation.js # Cache management utilities
+```
+
+### SWR Configuration Best Practices
+
+1. **Global Config**: Set revalidation policies globally
+2. **Error Handling**: Implement consistent error handling
+3. **Loading States**: Use SWR's built-in loading states
+4. **Cache Keys**: Use consistent, descriptive cache keys
+5. **Deduplication**: Leverage SWR's automatic deduplication
+6. **Revalidation**: Configure appropriate revalidation strategies
+
+# Data Fetching Rules - Bluespice 2.0
+
+## Overview
+
+SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pessimistic updates, and centralized error handling for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. SWR for GET Operations
+
+- Use SWR exclusively for data fetching and caching
+- Configure SWR globally for consistent behavior
+- Implement automatic revalidation strategies
+- Handle loading and error states uniformly
+
+### 2. Axios for Mutations
+
+- Use Axios for all POST, PUT, DELETE operations
+- Auto-attach JWT tokens via interceptors
+- Implement pessimistic updates (no optimistic)
+- Invalidate SWR cache after successful mutations
+
+### 3. Cache Management
+
+- Use `mutate()` to invalidate cache after mutations
+- Implement selective cache invalidation
+- Avoid optimistic updates for payroll data
+- Handle cache consistency across components
+
+### 4. Error Handling
+
+- Centralized error handling with toast notifications
+- Consistent error response format
+- Graceful degradation for network failures
+- User-friendly error messages
+
+## Patterns & Examples
+
+### SWR Configuration
+
+```javascript
+// lib/swr-config.js
+import { SWRConfig } from "swr";
+
+const swrConfig = {
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+  dedupingInterval: 2000,
+  errorRetryCount: 3,
+  errorRetryInterval: 5000,
+  onError: (error) => {
+    console.error("SWR Error:", error);
+    // Global error handling
+  },
+  fetcher: async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+    return response.json();
+  },
+};
+
+export const SWRProvider = ({ children }) => {
+  return <SWRConfig value={swrConfig}>{children}</SWRConfig>;
+};
+```
+
+### Custom Data Fetching Hooks
+
+```javascript
+// hooks/useEmployees.js
+import useSWR from "swr";
+import api from "@/lib/axios";
+import { mutate } from "swr";
+
+const fetcher = (url) => api.get(url).then((res) => res.data);
+
+export const useEmployees = () => {
+  const { data, error, isLoading } = useSWR("/api/employees", fetcher);
+
+  const addEmployee = async (employeeData) => {
+    try {
+      await api.post("/api/employees", employeeData);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateEmployee = async (id, data) => {
+    try {
+      await api.put(`/api/employees/${id}`, data);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteEmployee = async (id) => {
+    try {
+      await api.delete(`/api/employees/${id}`);
+      mutate("/api/employees"); // Re-fetch after success
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  return {
+    employees: data,
+    isLoading,
+    error,
+    addEmployee,
+    updateEmployee,
+    deleteEmployee,
+  };
+};
+```
+
+### Payroll Data Hook
+
+```javascript
+// hooks/usePayroll.js
+import useSWR from "swr";
+import api from "@/lib/axios";
+import { mutate } from "swr";
+
+export const usePayroll = (payPeriod) => {
+  const key = payPeriod ? `/api/payroll/${payPeriod}` : null;
+  const { data, error, isLoading } = useSWR(key, fetcher);
+
+  const generatePayroll = async (payPeriodData) => {
+    try {
+      await api.post("/api/payroll/generate", payPeriodData);
+      mutate("/api/payroll"); // Invalidate payroll list
+      mutate(key); // Invalidate specific payroll
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const approvePayroll = async (payrollId) => {
+    try {
+      await api.put(`/api/payroll/${payrollId}/approve`);
+      mutate(key); // Re-fetch specific payroll
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  return {
+    payroll: data,
+    isLoading,
+    error,
+    generatePayroll,
+    approvePayroll,
+  };
+};
+```
+
+### Axios Configuration with JWT
+
+```javascript
+// lib/axios.js
+import axios from "axios";
+import { getStoredToken, validateJWT, clearStoredToken } from "./auth";
+
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor for JWT
+api.interceptors.request.use(
+  (config) => {
+    const token = getStoredToken();
+    if (token && validateJWT(token)) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      clearStoredToken();
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status >= 500) {
+      // Server error - show generic message
+      console.error("Server Error:", error.response.data);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+```
+
+### Error Handling with Toast
+
+```javascript
+// hooks/useApiError.js
+import { toast } from "react-toastify";
+
+export const useApiError = () => {
+  const handleError = (error, customMessage) => {
+    let message = customMessage || "An error occurred";
+
+    if (error.response) {
+      // Server responded with error status
+      const { status, data } = error.response;
+
+      switch (status) {
+        case 400:
+          message = data.message || "Invalid request";
+          break;
+        case 401:
+          message = "Unauthorized access";
+          break;
+        case 403:
+          message = "Access forbidden";
+          break;
+        case 404:
+          message = "Resource not found";
+          break;
+        case 422:
+          message = data.message || "Validation error";
+          break;
+        case 500:
+          message = "Server error occurred";
+          break;
+        default:
+          message = data.message || "An error occurred";
+      }
+    } else if (error.request) {
+      // Network error
+      message = "Network error - please check your connection";
+    }
+
+    toast.error(message);
+  };
+
+  const handleSuccess = (message) => {
+    toast.success(message);
+  };
+
+  return { handleError, handleSuccess };
+};
+```
+
+### Cache Invalidation Patterns
+
+```javascript
+// utils/cache-invalidation.js
+import { mutate } from "swr";
+
+// Invalidate specific cache
+export const invalidateCache = (key) => {
+  mutate(key);
+};
+
+// Invalidate multiple related caches
+export const invalidateEmployeeCaches = () => {
+  mutate("/api/employees");
+  mutate("/api/employees/stats");
+  mutate("/api/departments"); // If departments depend on employees
+};
+
+// Invalidate all caches (use sparingly)
+export const invalidateAllCaches = () => {
+  mutate(() => true);
+};
+
+// Selective invalidation based on data
+export const invalidatePayrollCaches = (payPeriod) => {
+  mutate("/api/payroll");
+  mutate(`/api/payroll/${payPeriod}`);
+  mutate("/api/payroll/summary");
+};
+```
+
+### Loading States Management
+
+```javascript
+// hooks/useLoadingStates.js
+import { useState } from "react";
+
+export const useLoadingStates = () => {
+  const [loadingStates, setLoadingStates] = useState({});
+
+  const setLoading = (key, isLoading) => {
+    setLoadingStates((prev) => ({
+      ...prev,
+      [key]: isLoading,
+    }));
+  };
+
+  const isLoading = (key) => {
+    return loadingStates[key] || false;
+  };
+
+  const withLoading = async (key, asyncFn) => {
+    setLoading(key, true);
+    try {
+      const result = await asyncFn();
+      return result;
+    } finally {
+      setLoading(key, false);
+    }
+  };
+
+  return { setLoading, isLoading, withLoading };
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't use optimistic updates for payroll data
+const BadUpdateEmployee = async (id, data) => {
+  // Optimistically update UI
+  setEmployees((prev) =>
+    prev.map((emp) => (emp.id === id ? { ...emp, ...data } : emp))
+  );
+
+  try {
+    await api.put(`/api/employees/${id}`, data);
+  } catch (error) {
+    // Rollback on error - complex and error-prone
+    setEmployees(originalEmployees);
+  }
+};
+
+// Don't ignore cache invalidation
+const BadAddEmployee = async (employeeData) => {
+  await api.post("/api/employees", employeeData);
+  // Missing mutate() - cache becomes stale
+};
+
+// Don't mix fetch and axios
+const BadDataFetching = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/employees") // Inconsistent with axios usage
+      .then((res) => res.json())
+      .then(setData);
+  }, []);
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use pessimistic updates
+const GoodUpdateEmployee = async (id, data) => {
+  try {
+    await api.put(`/api/employees/${id}`, data);
+    mutate("/api/employees"); // Re-fetch after success
+    toast.success("Employee updated successfully");
+  } catch (error) {
+    toast.error("Failed to update employee");
+  }
+};
+
+// Always invalidate cache
+const GoodAddEmployee = async (employeeData) => {
+  try {
+    await api.post("/api/employees", employeeData);
+    mutate("/api/employees"); // Keep cache fresh
+    toast.success("Employee added successfully");
+  } catch (error) {
+    toast.error("Failed to add employee");
+  }
+};
+
+// Use consistent data fetching
+const GoodDataFetching = () => {
+  const { employees, isLoading, error } = useEmployees();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+
+  return <EmployeeList employees={employees} />;
+};
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "swr": "^2.0.0",
+  "axios": "^1.0.0",
+  "react-toastify": "^9.0.0"
+}
+```
+
+### File Structure
+
+```
+lib/
+├── swr-config.js         # SWR global configuration
+├── axios.js              # Axios instance with interceptors
+hooks/
+├── useEmployees.js       # Employee data hook
+├── usePayroll.js         # Payroll data hook
+├── useApiError.js        # Error handling hook
+├── useLoadingStates.js   # Loading states hook
+utils/
+├── cache-invalidation.js # Cache management utilities
+```
+
+### SWR Configuration Best Practices
+
+1. **Global Config**: Set revalidation policies globally
+2. **Error Handling**: Implement consistent error handling
+3. **Loading States**: Use SWR's built-in loading states
+4. **Cache Keys**: Use consistent, descriptive cache keys
+5. **Deduplication**: Leverage SWR's automatic deduplication
+6. **Revalidation**: Configure appropriate revalidation strategies

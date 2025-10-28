@@ -1,0 +1,996 @@
+---
+description: State management
+alwaysApply: false
+---
+
+# State Management Rules - Bluespice 2.0
+
+## Overview
+
+Zustand for global state, SWR for server state, useState for component state, with clear separation of concerns and predictable state updates for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. State Separation
+
+- **Zustand**: Global application state (user preferences, UI state, settings)
+- **SWR**: Server state (API data, caching, synchronization)
+- **useState**: Component-local state (form inputs, temporary UI state)
+- **useReducer**: Complex component state with multiple actions
+
+### 2. Zustand Store Structure
+
+- Create focused, single-responsibility stores
+- Use TypeScript for type safety (if applicable)
+- Implement actions as methods on the store
+- Keep stores small and composable
+
+### 3. State Updates
+
+- Use immutable update patterns
+- Implement optimistic updates only for UI state
+- Never mutate state directly
+- Use immer for complex state updates (optional)
+
+### 4. Store Composition
+
+- Compose multiple stores when needed
+- Avoid deep nesting in store structure
+- Use selectors for computed values
+- Implement store persistence for user preferences
+
+## Patterns & Examples
+
+### Basic Zustand Store
+
+```javascript
+// stores/authStore.js
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export const useAuthStore = create(
+  persist(
+    (set, get) => ({
+      // State
+      user: null,
+      isAuthenticated: false,
+      preferences: {
+        theme: "light",
+        language: "en",
+        notifications: true,
+      },
+
+      // Actions
+      setUser: (user) =>
+        set({
+          user,
+          isAuthenticated: !!user,
+        }),
+
+      setPreferences: (preferences) =>
+        set((state) => ({
+          preferences: { ...state.preferences, ...preferences },
+        })),
+
+      updateTheme: (theme) =>
+        set((state) => ({
+          preferences: { ...state.preferences, theme },
+        })),
+
+      logout: () =>
+        set({
+          user: null,
+          isAuthenticated: false,
+        }),
+
+      // Getters
+      getUserRole: () => get().user?.role,
+      isAdmin: () => get().user?.role === "admin",
+    }),
+    {
+      name: "auth-storage",
+      partialize: (state) => ({
+        preferences: state.preferences,
+      }),
+    }
+  )
+);
+```
+
+### UI State Store
+
+```javascript
+// stores/uiStore.js
+import { create } from "zustand";
+
+export const useUIStore = create((set, get) => ({
+  // State
+  sidebarOpen: false,
+  currentPage: "dashboard",
+  breadcrumbs: [],
+  modals: {
+    employeeForm: false,
+    payrollPreview: false,
+    deleteConfirm: false,
+  },
+  notifications: [],
+
+  // Actions
+  toggleSidebar: () =>
+    set((state) => ({
+      sidebarOpen: !state.sidebarOpen,
+    })),
+
+  setCurrentPage: (page) =>
+    set({
+      currentPage: page,
+    }),
+
+  setBreadcrumbs: (breadcrumbs) =>
+    set({
+      breadcrumbs,
+    }),
+
+  openModal: (modalName) =>
+    set((state) => ({
+      modals: { ...state.modals, [modalName]: true },
+    })),
+
+  closeModal: (modalName) =>
+    set((state) => ({
+      modals: { ...state.modals, [modalName]: false },
+    })),
+
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [
+        ...state.notifications,
+        {
+          id: Date.now(),
+          ...notification,
+        },
+      ],
+    })),
+
+  removeNotification: (id) =>
+    set((state) => ({
+      notifications: state.notifications.filter((n) => n.id !== id),
+    })),
+
+  // Getters
+  isModalOpen: (modalName) => get().modals[modalName],
+  hasNotifications: () => get().notifications.length > 0,
+}));
+```
+
+### Settings Store
+
+```javascript
+// stores/settingsStore.js
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export const useSettingsStore = create(
+  persist(
+    (set, get) => ({
+      // State
+      payrollSettings: {
+        payFrequency: "monthly",
+        currency: "USD",
+        taxRate: 0.25,
+        overtimeMultiplier: 1.5,
+      },
+      displaySettings: {
+        dateFormat: "MM/DD/YYYY",
+        currencyFormat: "$0,0.00",
+        timeFormat: "12h",
+        itemsPerPage: 25,
+      },
+      exportSettings: {
+        defaultFormat: "pdf",
+        includeCharts: true,
+        includeDetails: true,
+      },
+
+      // Actions
+      updatePayrollSettings: (settings) =>
+        set((state) => ({
+          payrollSettings: { ...state.payrollSettings, ...settings },
+        })),
+
+      updateDisplaySettings: (settings) =>
+        set((state) => ({
+          displaySettings: { ...state.displaySettings, ...settings },
+        })),
+
+      updateExportSettings: (settings) =>
+        set((state) => ({
+          exportSettings: { ...state.exportSettings, ...settings },
+        })),
+
+      resetSettings: () =>
+        set({
+          payrollSettings: {
+            payFrequency: "monthly",
+            currency: "USD",
+            taxRate: 0.25,
+            overtimeMultiplier: 1.5,
+          },
+          displaySettings: {
+            dateFormat: "MM/DD/YYYY",
+            currencyFormat: "$0,0.00",
+            timeFormat: "12h",
+            itemsPerPage: 25,
+          },
+          exportSettings: {
+            defaultFormat: "pdf",
+            includeCharts: true,
+            includeDetails: true,
+          },
+        }),
+
+      // Getters
+      getFormattedCurrency: (amount) => {
+        const { currencyFormat } = get().displaySettings;
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(amount);
+      },
+
+      getFormattedDate: (date) => {
+        const { dateFormat } = get().displaySettings;
+        return new Intl.DateTimeFormat("en-US").format(new Date(date));
+      },
+    }),
+    {
+      name: "settings-storage",
+    }
+  )
+);
+```
+
+### Store Composition Pattern
+
+```javascript
+// stores/index.js
+import { useAuthStore } from "./authStore";
+import { useUIStore } from "./uiStore";
+import { useSettingsStore } from "./settingsStore";
+
+// Composed hook for common operations
+export const useAppStore = () => {
+  const auth = useAuthStore();
+  const ui = useUIStore();
+  const settings = useSettingsStore();
+
+  return {
+    // Auth
+    user: auth.user,
+    isAuthenticated: auth.isAuthenticated,
+    logout: auth.logout,
+
+    // UI
+    sidebarOpen: ui.sidebarOpen,
+    toggleSidebar: ui.toggleSidebar,
+    openModal: ui.openModal,
+    closeModal: ui.closeModal,
+
+    // Settings
+    theme: auth.preferences.theme,
+    updateTheme: auth.updateTheme,
+    currencyFormat: settings.displaySettings.currencyFormat,
+    formatCurrency: settings.getFormattedCurrency,
+  };
+};
+```
+
+### Component State with useReducer
+
+```javascript
+// hooks/useFormState.js
+import { useReducer } from "react";
+
+const formReducer = (state, action) => {
+  switch (action.type) {
+    case "SET_FIELD":
+      return {
+        ...state,
+        [action.field]: action.value,
+        errors: {
+          ...state.errors,
+          [action.field]: null,
+        },
+      };
+
+    case "SET_ERRORS":
+      return {
+        ...state,
+        errors: action.errors,
+      };
+
+    case "SET_LOADING":
+      return {
+        ...state,
+        loading: action.loading,
+      };
+
+    case "RESET_FORM":
+      return {
+        ...state,
+        ...action.initialValues,
+        errors: {},
+        loading: false,
+      };
+
+    default:
+      return state;
+  }
+};
+
+export const useFormState = (initialValues) => {
+  const [state, dispatch] = useReducer(formReducer, {
+    ...initialValues,
+    errors: {},
+    loading: false,
+  });
+
+  const setField = (field, value) => {
+    dispatch({ type: "SET_FIELD", field, value });
+  };
+
+  const setErrors = (errors) => {
+    dispatch({ type: "SET_ERRORS", errors });
+  };
+
+  const setLoading = (loading) => {
+    dispatch({ type: "SET_LOADING", loading });
+  };
+
+  const resetForm = () => {
+    dispatch({ type: "RESET_FORM", initialValues });
+  };
+
+  return {
+    ...state,
+    setField,
+    setErrors,
+    setLoading,
+    resetForm,
+  };
+};
+```
+
+### Store Selectors
+
+```javascript
+// stores/selectors.js
+import { useAuthStore } from "./authStore";
+import { useUIStore } from "./uiStore";
+
+// Auth selectors
+export const useUserRole = () => useAuthStore((state) => state.user?.role);
+export const useIsAdmin = () =>
+  useAuthStore((state) => state.user?.role === "admin");
+export const useUserPreferences = () =>
+  useAuthStore((state) => state.preferences);
+
+// UI selectors
+export const useSidebarState = () =>
+  useUIStore((state) => ({
+    open: state.sidebarOpen,
+    toggle: state.toggleSidebar,
+  }));
+
+export const useModalState = (modalName) =>
+  useUIStore((state) => ({
+    isOpen: state.modals[modalName],
+    open: () => state.openModal(modalName),
+    close: () => state.closeModal(modalName),
+  }));
+
+// Computed selectors
+export const useUserDisplayName = () =>
+  useAuthStore((state) => {
+    const user = state.user;
+    return user ? `${user.firstName} ${user.lastName}` : "Guest";
+  });
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't put server state in Zustand
+const BadStore = create((set) => ({
+  employees: [], // This should be in SWR
+  fetchEmployees: async () => {
+    const data = await api.get("/employees");
+    set({ employees: data }); // Server state in global store
+  },
+}));
+
+// Don't mutate state directly
+const BadUpdate = () => {
+  const { user, setUser } = useAuthStore();
+
+  const updateUser = () => {
+    user.name = "New Name"; // Direct mutation - BAD!
+    setUser(user);
+  };
+};
+
+// Don't create overly complex stores
+const BadComplexStore = create((set) => ({
+  // Too many responsibilities
+  user: null,
+  employees: [],
+  payroll: [],
+  settings: {},
+  ui: {},
+  notifications: [],
+  // ... 50+ properties
+}));
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use SWR for server state
+const GoodDataFetching = () => {
+  const { employees, isLoading } = useEmployees(); // SWR hook
+  const { user } = useAuthStore(); // Only user state in Zustand
+};
+
+// Use immutable updates
+const GoodUpdate = () => {
+  const { user, setUser } = useAuthStore();
+
+  const updateUser = () => {
+    setUser({ ...user, name: "New Name" }); // Immutable update
+  };
+};
+
+// Create focused stores
+const GoodAuthStore = create((set) => ({
+  user: null,
+  setUser: (user) => set({ user }),
+  logout: () => set({ user: null }),
+}));
+
+const GoodUIStore = create((set) => ({
+  sidebarOpen: false,
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+}));
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "zustand": "^4.0.0",
+  "zustand/middleware": "^4.0.0"
+}
+```
+
+### File Structure
+
+```
+stores/
+├── authStore.js          # Authentication state
+├── uiStore.js            # UI state (modals, sidebar, etc.)
+├── settingsStore.js      # User preferences and settings
+├── index.js              # Store composition
+└── selectors.js          # Store selectors
+hooks/
+├── useFormState.js       # Complex form state with useReducer
+```
+
+### State Management Guidelines
+
+1. **Store Size**: Keep stores focused and under 200 lines
+2. **Actions**: Use descriptive action names
+3. **Selectors**: Create selectors for computed values
+4. **Persistence**: Use persist middleware for user preferences only
+5. **Testing**: Make stores easily testable
+6. **TypeScript**: Use TypeScript for better type safety
+7. **DevTools**: Enable Zustand devtools for debugging
+
+# State Management Rules - Bluespice 2.0
+
+## Overview
+
+Zustand for global state, SWR for server state, useState for component state, with clear separation of concerns and predictable state updates for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. State Separation
+
+- **Zustand**: Global application state (user preferences, UI state, settings)
+- **SWR**: Server state (API data, caching, synchronization)
+- **useState**: Component-local state (form inputs, temporary UI state)
+- **useReducer**: Complex component state with multiple actions
+
+### 2. Zustand Store Structure
+
+- Create focused, single-responsibility stores
+- Use TypeScript for type safety (if applicable)
+- Implement actions as methods on the store
+- Keep stores small and composable
+
+### 3. State Updates
+
+- Use immutable update patterns
+- Implement optimistic updates only for UI state
+- Never mutate state directly
+- Use immer for complex state updates (optional)
+
+### 4. Store Composition
+
+- Compose multiple stores when needed
+- Avoid deep nesting in store structure
+- Use selectors for computed values
+- Implement store persistence for user preferences
+
+## Patterns & Examples
+
+### Basic Zustand Store
+
+```javascript
+// stores/authStore.js
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export const useAuthStore = create(
+  persist(
+    (set, get) => ({
+      // State
+      user: null,
+      isAuthenticated: false,
+      preferences: {
+        theme: "light",
+        language: "en",
+        notifications: true,
+      },
+
+      // Actions
+      setUser: (user) =>
+        set({
+          user,
+          isAuthenticated: !!user,
+        }),
+
+      setPreferences: (preferences) =>
+        set((state) => ({
+          preferences: { ...state.preferences, ...preferences },
+        })),
+
+      updateTheme: (theme) =>
+        set((state) => ({
+          preferences: { ...state.preferences, theme },
+        })),
+
+      logout: () =>
+        set({
+          user: null,
+          isAuthenticated: false,
+        }),
+
+      // Getters
+      getUserRole: () => get().user?.role,
+      isAdmin: () => get().user?.role === "admin",
+    }),
+    {
+      name: "auth-storage",
+      partialize: (state) => ({
+        preferences: state.preferences,
+      }),
+    }
+  )
+);
+```
+
+### UI State Store
+
+```javascript
+// stores/uiStore.js
+import { create } from "zustand";
+
+export const useUIStore = create((set, get) => ({
+  // State
+  sidebarOpen: false,
+  currentPage: "dashboard",
+  breadcrumbs: [],
+  modals: {
+    employeeForm: false,
+    payrollPreview: false,
+    deleteConfirm: false,
+  },
+  notifications: [],
+
+  // Actions
+  toggleSidebar: () =>
+    set((state) => ({
+      sidebarOpen: !state.sidebarOpen,
+    })),
+
+  setCurrentPage: (page) =>
+    set({
+      currentPage: page,
+    }),
+
+  setBreadcrumbs: (breadcrumbs) =>
+    set({
+      breadcrumbs,
+    }),
+
+  openModal: (modalName) =>
+    set((state) => ({
+      modals: { ...state.modals, [modalName]: true },
+    })),
+
+  closeModal: (modalName) =>
+    set((state) => ({
+      modals: { ...state.modals, [modalName]: false },
+    })),
+
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [
+        ...state.notifications,
+        {
+          id: Date.now(),
+          ...notification,
+        },
+      ],
+    })),
+
+  removeNotification: (id) =>
+    set((state) => ({
+      notifications: state.notifications.filter((n) => n.id !== id),
+    })),
+
+  // Getters
+  isModalOpen: (modalName) => get().modals[modalName],
+  hasNotifications: () => get().notifications.length > 0,
+}));
+```
+
+### Settings Store
+
+```javascript
+// stores/settingsStore.js
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export const useSettingsStore = create(
+  persist(
+    (set, get) => ({
+      // State
+      payrollSettings: {
+        payFrequency: "monthly",
+        currency: "USD",
+        taxRate: 0.25,
+        overtimeMultiplier: 1.5,
+      },
+      displaySettings: {
+        dateFormat: "MM/DD/YYYY",
+        currencyFormat: "$0,0.00",
+        timeFormat: "12h",
+        itemsPerPage: 25,
+      },
+      exportSettings: {
+        defaultFormat: "pdf",
+        includeCharts: true,
+        includeDetails: true,
+      },
+
+      // Actions
+      updatePayrollSettings: (settings) =>
+        set((state) => ({
+          payrollSettings: { ...state.payrollSettings, ...settings },
+        })),
+
+      updateDisplaySettings: (settings) =>
+        set((state) => ({
+          displaySettings: { ...state.displaySettings, ...settings },
+        })),
+
+      updateExportSettings: (settings) =>
+        set((state) => ({
+          exportSettings: { ...state.exportSettings, ...settings },
+        })),
+
+      resetSettings: () =>
+        set({
+          payrollSettings: {
+            payFrequency: "monthly",
+            currency: "USD",
+            taxRate: 0.25,
+            overtimeMultiplier: 1.5,
+          },
+          displaySettings: {
+            dateFormat: "MM/DD/YYYY",
+            currencyFormat: "$0,0.00",
+            timeFormat: "12h",
+            itemsPerPage: 25,
+          },
+          exportSettings: {
+            defaultFormat: "pdf",
+            includeCharts: true,
+            includeDetails: true,
+          },
+        }),
+
+      // Getters
+      getFormattedCurrency: (amount) => {
+        const { currencyFormat } = get().displaySettings;
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(amount);
+      },
+
+      getFormattedDate: (date) => {
+        const { dateFormat } = get().displaySettings;
+        return new Intl.DateTimeFormat("en-US").format(new Date(date));
+      },
+    }),
+    {
+      name: "settings-storage",
+    }
+  )
+);
+```
+
+### Store Composition Pattern
+
+```javascript
+// stores/index.js
+import { useAuthStore } from "./authStore";
+import { useUIStore } from "./uiStore";
+import { useSettingsStore } from "./settingsStore";
+
+// Composed hook for common operations
+export const useAppStore = () => {
+  const auth = useAuthStore();
+  const ui = useUIStore();
+  const settings = useSettingsStore();
+
+  return {
+    // Auth
+    user: auth.user,
+    isAuthenticated: auth.isAuthenticated,
+    logout: auth.logout,
+
+    // UI
+    sidebarOpen: ui.sidebarOpen,
+    toggleSidebar: ui.toggleSidebar,
+    openModal: ui.openModal,
+    closeModal: ui.closeModal,
+
+    // Settings
+    theme: auth.preferences.theme,
+    updateTheme: auth.updateTheme,
+    currencyFormat: settings.displaySettings.currencyFormat,
+    formatCurrency: settings.getFormattedCurrency,
+  };
+};
+```
+
+### Component State with useReducer
+
+```javascript
+// hooks/useFormState.js
+import { useReducer } from "react";
+
+const formReducer = (state, action) => {
+  switch (action.type) {
+    case "SET_FIELD":
+      return {
+        ...state,
+        [action.field]: action.value,
+        errors: {
+          ...state.errors,
+          [action.field]: null,
+        },
+      };
+
+    case "SET_ERRORS":
+      return {
+        ...state,
+        errors: action.errors,
+      };
+
+    case "SET_LOADING":
+      return {
+        ...state,
+        loading: action.loading,
+      };
+
+    case "RESET_FORM":
+      return {
+        ...state,
+        ...action.initialValues,
+        errors: {},
+        loading: false,
+      };
+
+    default:
+      return state;
+  }
+};
+
+export const useFormState = (initialValues) => {
+  const [state, dispatch] = useReducer(formReducer, {
+    ...initialValues,
+    errors: {},
+    loading: false,
+  });
+
+  const setField = (field, value) => {
+    dispatch({ type: "SET_FIELD", field, value });
+  };
+
+  const setErrors = (errors) => {
+    dispatch({ type: "SET_ERRORS", errors });
+  };
+
+  const setLoading = (loading) => {
+    dispatch({ type: "SET_LOADING", loading });
+  };
+
+  const resetForm = () => {
+    dispatch({ type: "RESET_FORM", initialValues });
+  };
+
+  return {
+    ...state,
+    setField,
+    setErrors,
+    setLoading,
+    resetForm,
+  };
+};
+```
+
+### Store Selectors
+
+```javascript
+// stores/selectors.js
+import { useAuthStore } from "./authStore";
+import { useUIStore } from "./uiStore";
+
+// Auth selectors
+export const useUserRole = () => useAuthStore((state) => state.user?.role);
+export const useIsAdmin = () =>
+  useAuthStore((state) => state.user?.role === "admin");
+export const useUserPreferences = () =>
+  useAuthStore((state) => state.preferences);
+
+// UI selectors
+export const useSidebarState = () =>
+  useUIStore((state) => ({
+    open: state.sidebarOpen,
+    toggle: state.toggleSidebar,
+  }));
+
+export const useModalState = (modalName) =>
+  useUIStore((state) => ({
+    isOpen: state.modals[modalName],
+    open: () => state.openModal(modalName),
+    close: () => state.closeModal(modalName),
+  }));
+
+// Computed selectors
+export const useUserDisplayName = () =>
+  useAuthStore((state) => {
+    const user = state.user;
+    return user ? `${user.firstName} ${user.lastName}` : "Guest";
+  });
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't put server state in Zustand
+const BadStore = create((set) => ({
+  employees: [], // This should be in SWR
+  fetchEmployees: async () => {
+    const data = await api.get("/employees");
+    set({ employees: data }); // Server state in global store
+  },
+}));
+
+// Don't mutate state directly
+const BadUpdate = () => {
+  const { user, setUser } = useAuthStore();
+
+  const updateUser = () => {
+    user.name = "New Name"; // Direct mutation - BAD!
+    setUser(user);
+  };
+};
+
+// Don't create overly complex stores
+const BadComplexStore = create((set) => ({
+  // Too many responsibilities
+  user: null,
+  employees: [],
+  payroll: [],
+  settings: {},
+  ui: {},
+  notifications: [],
+  // ... 50+ properties
+}));
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use SWR for server state
+const GoodDataFetching = () => {
+  const { employees, isLoading } = useEmployees(); // SWR hook
+  const { user } = useAuthStore(); // Only user state in Zustand
+};
+
+// Use immutable updates
+const GoodUpdate = () => {
+  const { user, setUser } = useAuthStore();
+
+  const updateUser = () => {
+    setUser({ ...user, name: "New Name" }); // Immutable update
+  };
+};
+
+// Create focused stores
+const GoodAuthStore = create((set) => ({
+  user: null,
+  setUser: (user) => set({ user }),
+  logout: () => set({ user: null }),
+}));
+
+const GoodUIStore = create((set) => ({
+  sidebarOpen: false,
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+}));
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "zustand": "^4.0.0",
+  "zustand/middleware": "^4.0.0"
+}
+```
+
+### File Structure
+
+```
+stores/
+├── authStore.js          # Authentication state
+├── uiStore.js            # UI state (modals, sidebar, etc.)
+├── settingsStore.js      # User preferences and settings
+├── index.js              # Store composition
+└── selectors.js          # Store selectors
+hooks/
+├── useFormState.js       # Complex form state with useReducer
+```
+
+### State Management Guidelines
+
+1. **Store Size**: Keep stores focused and under 200 lines
+2. **Actions**: Use descriptive action names
+3. **Selectors**: Create selectors for computed values
+4. **Persistence**: Use persist middleware for user preferences only
+5. **Testing**: Make stores easily testable
+6. **TypeScript**: Use TypeScript for better type safety
+7. **DevTools**: Enable Zustand devtools for debugging

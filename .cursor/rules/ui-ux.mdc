@@ -12,6 +12,7 @@ Material-UI (MUI) as primary UI library with centralized theme configuration, co
 - Extend MUI components rather than replacing them
 - Maintain MUI design system consistency
 - Leverage MUI's accessibility features
+- All mui override should be inside a dedicated file
 
 ### 2. Theme as Single Source of Truth
 
