@@ -1,0 +1,313 @@
+# Authentication Rules - Bluespice 2.0
+
+## Overview
+
+JWT-based authentication with Supabase backend, client-side validation, and layout-based route protection for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. JWT-First Authentication
+
+- Use Supabase Auth for JWT generation and validation
+- Store JWT in localStorage for persistence
+- Never store sensitive data in JWT payload
+- Implement automatic token refresh
+
+### 2. Layout-Based Route Protection
+
+- Protect route groups via layout components, not individual pages
+- Single auth check per layout for performance
+- Redirect to login for unauthenticated users
+- Role-based access control (admin, hr, employee)
+
+### 3. Client-Side Security
+
+- Validate JWT tokens client-side before API calls
+- Check token expiration before requests
+- Clear tokens on logout
+- Handle token refresh gracefully
+
+## Patterns & Examples
+
+### JWT Token Management
+
+```javascript
+// lib/auth.js
+import { createClient } from "@supabase/supabase-js";
+
+export const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+export const validateJWT = (token) => {
+  try {
+    const decoded = jwt.decode(token);
+    const now = Date.now() / 1000;
+    return decoded.exp > now && decoded.role;
+  } catch {
+    return false;
+  }
+};
+
+export const getStoredToken = () => {
+  return localStorage.getItem("bluespice_token");
+};
+
+export const setStoredToken = (token) => {
+  localStorage.setItem("bluespice_token", token);
+};
+
+export const clearStoredToken = () => {
+  localStorage.removeItem("bluespice_token");
+};
+```
+
+### Auth Hook Pattern
+
+```javascript
+// hooks/useAuth.js
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/auth";
+
+export const useAuth = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const getSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setLoading(false);
+    };
+
+    getSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signIn = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (data.session) {
+      setStoredToken(data.session.access_token);
+    }
+    return { data, error };
+  };
+
+  const signOut = async () => {
+    clearStoredToken();
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  return { user, loading, signIn, signOut };
+};
+```
+
+### Layout-Based Route Protection
+
+```javascript
+// app/(dashboard)/layout.js
+"use client";
+import { useAuth } from "@/hooks/useAuth";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+export default function DashboardLayout({ children }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar user={user} />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+### Role-Based Access Control
+
+```javascript
+// utils/permissions.js
+export const hasPermission = (userRole, requiredRoles) => {
+  if (!userRole || !requiredRoles) return false;
+  return requiredRoles.includes(userRole);
+};
+
+export const usePermissions = (requiredRoles) => {
+  const { user } = useAuth();
+  const userRole = user?.user_metadata?.role;
+
+  return {
+    hasAccess: hasPermission(userRole, requiredRoles),
+    userRole,
+  };
+};
+
+// Usage in components
+const { hasAccess } = usePermissions(["admin", "hr"]);
+if (!hasAccess) return <AccessDenied />;
+```
+
+### Axios Interceptor for JWT
+
+```javascript
+// lib/axios.js
+import axios from "axios";
+import { getStoredToken, validateJWT } from "./auth";
+
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+});
+
+api.interceptors.request.use((config) => {
+  const token = getStoredToken();
+  if (token && validateJWT(token)) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Token expired, redirect to login
+      clearStoredToken();
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't check auth in every component
+const EmployeeList = () => {
+  const { user } = useAuth();
+  if (!user) return <Login />;
+  // ... rest of component
+};
+
+// Don't store sensitive data in JWT
+const payload = {
+  userId: user.id,
+  password: user.password, // NEVER DO THIS
+  salary: employee.salary, // Sensitive business data
+};
+
+// Don't ignore token expiration
+const makeApiCall = async () => {
+  const token = getStoredToken();
+  // Missing validation!
+  return api.get("/employees", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use layout-based protection
+const EmployeeList = () => {
+  // Auth already checked in layout
+  return <div>Employee list content</div>;
+};
+
+// Store only necessary data in JWT
+const payload = {
+  userId: user.id,
+  role: user.role,
+  email: user.email,
+};
+
+// Always validate tokens
+const makeApiCall = async () => {
+  const token = getStoredToken();
+  if (!validateJWT(token)) {
+    throw new Error("Invalid token");
+  }
+  return api.get("/employees", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "@supabase/supabase-js": "^2.0.0",
+  "axios": "^1.0.0",
+  "jwt-decode": "^3.0.0"
+}
+```
+
+### File Structure
+
+```
+lib/
+├── auth.js              # Supabase client & JWT utilities
+├── axios.js             # Axios instance with interceptors
+hooks/
+├── useAuth.js           # Main auth hook
+├── usePermissions.js     # Role-based access hook
+utils/
+├── permissions.js       # Permission utilities
+app/
+├── (auth)/              # Unprotected routes
+├── (dashboard)/         # Protected routes
+│   └── layout.js        # Auth guard layout
+```
+
+### Environment Variables
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_API_BASE_URL=your_api_base_url
+```
+
+## Security Considerations
+
+1. **Token Storage**: Use localStorage for persistence, sessionStorage for sensitive sessions
+2. **Token Refresh**: Implement automatic refresh before expiration
+3. **Logout**: Clear all tokens and Supabase session
+4. **CORS**: Configure Supabase CORS for production domains only
+5. **HTTPS**: Always use HTTPS in production for token transmission

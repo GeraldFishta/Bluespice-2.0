@@ -1,0 +1,606 @@
+# Performance Rules - Bluespice 2.0
+
+## Overview
+
+Next.js automatic code splitting, lazy loading patterns, React.memo/useMemo/useCallback usage, image optimization, bundle analysis, and SWR caching strategy for the Bluespice payroll application.
+
+## Core Principles
+
+### 1. Code Splitting & Lazy Loading
+
+- Leverage Next.js automatic code splitting
+- Implement route-based lazy loading
+- Use dynamic imports for heavy components
+- Split vendor bundles appropriately
+
+### 2. React Performance Optimization
+
+- Use React.memo for expensive components
+- Implement useMemo for expensive calculations
+- Use useCallback for stable function references
+- Avoid unnecessary re-renders
+
+### 3. Image & Asset Optimization
+
+- Use Next.js Image component for automatic optimization
+- Implement proper image formats (WebP, AVIF)
+- Use lazy loading for below-the-fold images
+- Optimize bundle size with tree shaking
+
+### 4. Caching Strategy
+
+- Configure SWR for optimal caching
+- Implement proper cache invalidation
+- Use browser caching for static assets
+- Optimize API response caching
+
+## Patterns & Examples
+
+### Lazy Loading Components
+
+```javascript
+// components/lazy/EmployeeTable.js
+import { lazy, Suspense } from "react";
+import { CircularProgress, Box } from "@mui/material";
+
+// Lazy load heavy components
+const DataGrid = lazy(() =>
+  import("@mui/x-data-grid").then((module) => ({ default: module.DataGrid }))
+);
+const EmployeeChart = lazy(() => import("./EmployeeChart"));
+
+const EmployeeTable = ({ employees }) => {
+  return (
+    <Box>
+      <Suspense fallback={<CircularProgress />}>
+        <DataGrid rows={employees} columns={columns} loading={false} />
+      </Suspense>
+
+      <Suspense fallback={<Box height={200} />}>
+        <EmployeeChart data={employees} />
+      </Suspense>
+    </Box>
+  );
+};
+
+export default EmployeeTable;
+```
+
+### Route-Based Code Splitting
+
+```javascript
+// app/(dashboard)/employees/page.js
+import { lazy, Suspense } from "react";
+import { Box, CircularProgress } from "@mui/material";
+
+// Lazy load page components
+const EmployeeList = lazy(() => import("@/components/employees/EmployeeList"));
+const EmployeeFilters = lazy(() =>
+  import("@/components/employees/EmployeeFilters")
+);
+
+export default function EmployeesPage() {
+  return (
+    <Box>
+      <Suspense fallback={<CircularProgress />}>
+        <EmployeeFilters />
+      </Suspense>
+
+      <Suspense
+        fallback={
+          <Box height={400}>
+            <CircularProgress />
+          </Box>
+        }
+      >
+        <EmployeeList />
+      </Suspense>
+    </Box>
+  );
+}
+```
+
+### React.memo Optimization
+
+```javascript
+// components/employees/EmployeeCard.js
+import { memo } from "react";
+import { Card, CardContent, Typography, Avatar } from "@mui/material";
+
+const EmployeeCard = memo(
+  ({ employee, onEdit, onDelete }) => {
+    return (
+      <Card>
+        <CardContent>
+          <Avatar src={employee.avatar} />
+          <Typography variant="h6">{employee.name}</Typography>
+          <Typography variant="body2">{employee.position}</Typography>
+          <Typography variant="body2">{employee.department}</Typography>
+        </CardContent>
+      </Card>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison function
+    return (
+      prevProps.employee.id === nextProps.employee.id &&
+      prevProps.employee.name === nextProps.employee.name &&
+      prevProps.employee.position === nextProps.employee.position
+    );
+  }
+);
+
+export default EmployeeCard;
+```
+
+### useMemo for Expensive Calculations
+
+```javascript
+// components/payroll/PayrollSummary.js
+import { useMemo } from "react";
+import { Box, Typography, Grid } from "@mui/material";
+
+const PayrollSummary = ({ payrollData }) => {
+  // Memoize expensive calculations
+  const summary = useMemo(() => {
+    if (!payrollData?.length) return null;
+
+    const totalGross = payrollData.reduce(
+      (sum, record) => sum + record.grossPay,
+      0
+    );
+    const totalDeductions = payrollData.reduce(
+      (sum, record) => sum + record.deductions,
+      0
+    );
+    const totalNet = totalGross - totalDeductions;
+    const averageSalary = totalGross / payrollData.length;
+
+    return {
+      totalGross,
+      totalDeductions,
+      totalNet,
+      averageSalary,
+      employeeCount: payrollData.length,
+    };
+  }, [payrollData]);
+
+  // Memoize filtered data
+  const highEarners = useMemo(() => {
+    if (!payrollData) return [];
+    return payrollData.filter(
+      (record) => record.grossPay > summary?.averageSalary * 1.5
+    );
+  }, [payrollData, summary?.averageSalary]);
+
+  if (!summary) return <Typography>No data available</Typography>;
+
+  return (
+    <Grid container spacing={2}>
+      <Grid item xs={12} sm={6} md={3}>
+        <Box>
+          <Typography variant="h6">Total Gross</Typography>
+          <Typography variant="h4">
+            ${summary.totalGross.toLocaleString()}
+          </Typography>
+        </Box>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Box>
+          <Typography variant="h6">Total Deductions</Typography>
+          <Typography variant="h4">
+            ${summary.totalDeductions.toLocaleString()}
+          </Typography>
+        </Box>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Box>
+          <Typography variant="h6">Total Net</Typography>
+          <Typography variant="h4">
+            ${summary.totalNet.toLocaleString()}
+          </Typography>
+        </Box>
+      </Grid>
+      <Grid item xs={12} sm={6} md={3}>
+        <Box>
+          <Typography variant="h6">Employees</Typography>
+          <Typography variant="h4">{summary.employeeCount}</Typography>
+        </Box>
+      </Grid>
+    </Grid>
+  );
+};
+
+export default PayrollSummary;
+```
+
+### useCallback for Stable References
+
+```javascript
+// components/employees/EmployeeList.js
+import { useCallback, useState } from "react";
+import { DataGrid } from "@mui/x-data-grid";
+
+const EmployeeList = ({ employees, onEdit, onDelete }) => {
+  const [selectedRows, setSelectedRows] = useState([]);
+
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleRowClick = useCallback(
+    (params) => {
+      onEdit(params.row);
+    },
+    [onEdit]
+  );
+
+  const handleSelectionChange = useCallback((newSelection) => {
+    setSelectedRows(newSelection);
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedRows.length > 0) {
+      selectedRows.forEach((id) => onDelete(id));
+      setSelectedRows([]);
+    }
+  }, [selectedRows, onDelete]);
+
+  const columns = useMemo(
+    () => [
+      {
+        field: "name",
+        headerName: "Name",
+        width: 200,
+        renderCell: (params) => (
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Avatar src={params.row.avatar} sx={{ mr: 1 }} />
+            {params.value}
+          </Box>
+        ),
+      },
+      {
+        field: "position",
+        headerName: "Position",
+        width: 150,
+      },
+      {
+        field: "department",
+        headerName: "Department",
+        width: 150,
+      },
+      {
+        field: "salary",
+        headerName: "Salary",
+        width: 120,
+        renderCell: (params) => `$${params.value.toLocaleString()}`,
+      },
+    ],
+    []
+  );
+
+  return (
+    <DataGrid
+      rows={employees}
+      columns={columns}
+      onRowClick={handleRowClick}
+      onSelectionModelChange={handleSelectionChange}
+      checkboxSelection
+    />
+  );
+};
+
+export default EmployeeList;
+```
+
+### Image Optimization
+
+```javascript
+// components/common/OptimizedImage.js
+import Image from "next/image";
+import { Box } from "@mui/material";
+
+const OptimizedImage = ({
+  src,
+  alt,
+  width,
+  height,
+  priority = false,
+  placeholder = "blur",
+  ...props
+}) => {
+  return (
+    <Box position="relative" {...props}>
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        priority={priority}
+        placeholder={placeholder}
+        blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      />
+    </Box>
+  );
+};
+
+export default OptimizedImage;
+```
+
+### SWR Performance Configuration
+
+```javascript
+// lib/swr-performance.js
+import { SWRConfig } from "swr";
+
+const performanceConfig = {
+  // Disable automatic revalidation for better performance
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+
+  // Optimize caching
+  dedupingInterval: 2000,
+  focusThrottleInterval: 5000,
+
+  // Error handling
+  errorRetryCount: 3,
+  errorRetryInterval: 5000,
+
+  // Performance optimizations
+  loadingTimeout: 3000,
+
+  // Custom fetcher with performance monitoring
+  fetcher: async (url) => {
+    const startTime = performance.now();
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      const endTime = performance.now();
+      console.log(`API call to ${url} took ${endTime - startTime}ms`);
+
+      return data;
+    } catch (error) {
+      console.error(`API call to ${url} failed:`, error);
+      throw error;
+    }
+  },
+
+  // Cache management
+  onSuccess: (data, key) => {
+    console.log(`Data cached for ${key}`);
+  },
+
+  onError: (error, key) => {
+    console.error(`Error fetching ${key}:`, error);
+  },
+};
+
+export const SWRPerformanceProvider = ({ children }) => {
+  return <SWRConfig value={performanceConfig}>{children}</SWRConfig>;
+};
+```
+
+### Bundle Analysis Configuration
+
+```javascript
+// next.config.js
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
+
+module.exports = withBundleAnalyzer({
+  // Performance optimizations
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ["@mui/material", "@mui/icons-material"],
+  },
+
+  // Image optimization
+  images: {
+    formats: ["image/webp", "image/avif"],
+    minimumCacheTTL: 60,
+  },
+
+  // Compression
+  compress: true,
+
+  // Bundle optimization
+  webpack: (config, { dev, isServer }) => {
+    if (!dev && !isServer) {
+      // Optimize bundle size
+      config.optimization.splitChunks = {
+        chunks: "all",
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: "vendors",
+            chunks: "all",
+          },
+          mui: {
+            test: /[\\/]node_modules[\\/]@mui[\\/]/,
+            name: "mui",
+            chunks: "all",
+          },
+        },
+      };
+    }
+
+    return config;
+  },
+});
+```
+
+### Performance Monitoring Hook
+
+```javascript
+// hooks/usePerformanceMonitor.js
+import { useEffect, useRef } from "react";
+
+export const usePerformanceMonitor = (componentName) => {
+  const renderStart = useRef();
+  const renderCount = useRef(0);
+
+  useEffect(() => {
+    renderStart.current = performance.now();
+    renderCount.current += 1;
+
+    return () => {
+      const renderTime = performance.now() - renderStart.current;
+      if (renderTime > 16) {
+        // More than one frame (16ms)
+        console.warn(`${componentName} render took ${renderTime.toFixed(2)}ms`);
+      }
+    };
+  });
+
+  useEffect(() => {
+    if (renderCount.current > 10) {
+      console.warn(
+        `${componentName} has rendered ${renderCount.current} times`
+      );
+    }
+  }, [componentName]);
+};
+```
+
+## Anti-Patterns
+
+### ❌ Don't Do This
+
+```javascript
+// Don't create unnecessary re-renders
+const BadComponent = ({ employees, onEdit }) => {
+  const expensiveCalculation = () => {
+    // This runs on every render!
+    return employees.reduce((sum, emp) => sum + emp.salary, 0);
+  };
+
+  return (
+    <div>
+      {employees.map((employee) => (
+        <EmployeeCard
+          key={employee.id}
+          employee={employee}
+          onEdit={() => onEdit(employee)} // New function on every render
+        />
+      ))}
+    </div>
+  );
+};
+
+// Don't load everything at once
+const BadDataLoading = () => {
+  const [employees, setEmployees] = useState([]);
+  const [payroll, setPayroll] = useState([]);
+  const [reports, setReports] = useState([]);
+
+  useEffect(() => {
+    // Loading everything at once - bad for performance
+    Promise.all([fetchEmployees(), fetchPayroll(), fetchReports()]).then(
+      ([emp, pay, rep]) => {
+        setEmployees(emp);
+        setPayroll(pay);
+        setReports(rep);
+      }
+    );
+  }, []);
+};
+
+// Don't ignore image optimization
+const BadImage = ({ src, alt }) => {
+  return <img src={src} alt={alt} />; // No optimization
+};
+```
+
+### ✅ Do This Instead
+
+```javascript
+// Use memoization to prevent unnecessary calculations
+const GoodComponent = ({ employees, onEdit }) => {
+  const totalSalary = useMemo(() => {
+    return employees.reduce((sum, emp) => sum + emp.salary, 0);
+  }, [employees]);
+
+  const handleEdit = useCallback(
+    (employee) => {
+      onEdit(employee);
+    },
+    [onEdit]
+  );
+
+  return (
+    <div>
+      {employees.map((employee) => (
+        <EmployeeCard
+          key={employee.id}
+          employee={employee}
+          onEdit={handleEdit} // Stable reference
+        />
+      ))}
+    </div>
+  );
+};
+
+// Load data on demand
+const GoodDataLoading = () => {
+  const { employees } = useEmployees(); // Load when needed
+  const { payroll } = usePayroll(); // Load when needed
+  const { reports } = useReports(); // Load when needed
+
+  return (
+    <Dashboard employees={employees} payroll={payroll} reports={reports} />
+  );
+};
+
+// Use optimized images
+const GoodImage = ({ src, alt, width, height }) => {
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      priority={false}
+      placeholder="blur"
+    />
+  );
+};
+```
+
+## Related Files/Dependencies
+
+### Required Packages
+
+```json
+{
+  "@next/bundle-analyzer": "^13.0.0",
+  "webpack-bundle-analyzer": "^4.0.0"
+}
+```
+
+### File Structure
+
+```
+components/
+├── lazy/                 # Lazy-loaded components
+│   └── EmployeeTable.js
+├── common/
+│   └── OptimizedImage.js
+hooks/
+└── usePerformanceMonitor.js
+lib/
+└── swr-performance.js
+```
+
+### Performance Best Practices
+
+1. **Code Splitting**: Use dynamic imports for heavy components
+2. **Memoization**: Use React.memo, useMemo, useCallback appropriately
+3. **Image Optimization**: Always use Next.js Image component
+4. **Bundle Analysis**: Regularly analyze bundle size
+5. **Caching**: Configure SWR for optimal caching
+6. **Monitoring**: Track performance metrics
+7. **Lazy Loading**: Load components and data on demand
+8. **Tree Shaking**: Remove unused code from bundles
+9. **Compression**: Enable gzip/brotli compression
+10. **CDN**: Use CDN for static assets
