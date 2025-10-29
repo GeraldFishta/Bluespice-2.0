@@ -21,12 +21,20 @@ export const employeeSchema = yup.object({
 
     phone: yup
         .string()
-        .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, "Invalid phone number"),
+        .matches(
+            /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/,
+            "Invalid phone number"
+        ),
 
     hireDate: yup
         .date()
         .required("Hire date is required")
         .max(new Date(), "Hire date cannot be in the future"),
+
+    employeeId: yup
+        .string()
+        .required("Employee ID is required")
+        .min(2, "Employee ID must be at least 2 characters"),
 
     salary: yup
         .number()
@@ -34,13 +42,21 @@ export const employeeSchema = yup.object({
         .positive("Salary must be positive")
         .min(0, "Salary must be at least 0"),
 
-    department: yup
-        .string()
-        .required("Department is required"),
+    hourlyRate: yup.number().positive("Hourly rate must be positive").nullable(),
 
-    position: yup
+    employmentType: yup
         .string()
-        .required("Position is required"),
+        .oneOf(["full-time", "part-time", "contract"], "Invalid employment type")
+        .required("Employment type is required"),
+
+    status: yup
+        .string()
+        .oneOf(["active", "inactive", "terminated"], "Invalid status")
+        .required("Status is required"),
+
+    department: yup.string().required("Department is required"),
+
+    position: yup.string().required("Position is required"),
 
     role: yup
         .string()

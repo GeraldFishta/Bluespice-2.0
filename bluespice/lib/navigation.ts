@@ -69,7 +69,16 @@ export const navigationRegistry: Record<string, NavItem> = {
 
 export function getNavigationItems(userRole: string | null): NavItem[] {
     return Object.values(navigationRegistry)
-        .filter((item) => !item.permissions || item.permissions.includes(userRole || ""))
+        .filter((item) => {
+            // If no permissions required, show to everyone
+            if (!item.permissions || item.permissions.length === 0) return true;
+            // If userRole is null, show Dashboard and Timesheets (basic access)
+            if (!userRole) {
+                return item.path === "/dashboard" || item.path === "/timesheets";
+            }
+            // Check if user role is in permissions
+            return item.permissions.includes(userRole);
+        })
         .sort((a, b) => a.order - b.order)
 }
 

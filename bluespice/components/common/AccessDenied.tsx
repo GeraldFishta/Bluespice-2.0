@@ -22,7 +22,7 @@ export const AccessDenied = () => {
           Access Denied
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          You don't have permission to access this resource.
+          You don&apos;t have permission to access this resource.
         </Typography>
         <Button variant="contained" onClick={() => router.back()}>
           Go Back

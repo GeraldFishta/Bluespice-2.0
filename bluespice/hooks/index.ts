@@ -7,3 +7,4 @@ export {
     useAnyPermission,
     useAllPermissions,
 } from "./usePermissions";
+export { useEmployees, useEmployee } from "./useEmployees";
