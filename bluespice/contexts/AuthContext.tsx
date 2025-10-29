@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 import { supabase } from "@/lib/supabase";
@@ -109,8 +110,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<string | null>(null);
 
+  // Use refs to track if fetch is in progress and prevent duplicate calls
+  const fetchingRoleRef = useRef(false);
+  const currentUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
+
+    const fetchUserRole = async (user: User) => {
+      // Prevent duplicate fetches for the same user
+      if (fetchingRoleRef.current && currentUserIdRef.current === user.id) {
+        return;
+      }
+
+      fetchingRoleRef.current = true;
+      currentUserIdRef.current = user.id;
+
+      try {
+        const userRole = await ensureProfileExists(user);
+        if (mounted) {
+          setRole(userRole);
+        }
+      } finally {
+        fetchingRoleRef.current = false;
+      }
+    };
 
     const init = async () => {
       const { data } = await supabase.auth.getSession();
@@ -119,12 +143,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Fetch and ensure profile exists ONCE
       if (data.session?.user) {
-        const userRole = await ensureProfileExists(data.session.user);
-        if (mounted) {
-          setRole(userRole);
-        }
+        await fetchUserRole(data.session.user);
       } else {
         setRole(null);
+        currentUserIdRef.current = null;
       }
 
       if (mounted) {
@@ -141,18 +163,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Update role when session changes
         if (s?.user) {
-          const userRole = await ensureProfileExists(s.user);
-          if (mounted) {
-            setRole(userRole);
+          // Reset refs if user changed
+          if (currentUserIdRef.current !== s.user.id) {
+            fetchingRoleRef.current = false;
+            currentUserIdRef.current = null;
           }
+          await fetchUserRole(s.user);
         } else {
           setRole(null);
+          currentUserIdRef.current = null;
+          fetchingRoleRef.current = false;
         }
       }
     );
 
     return () => {
       mounted = false;
+      fetchingRoleRef.current = false;
+      currentUserIdRef.current = null;
       listener.subscription.unsubscribe();
     };
   }, []);
