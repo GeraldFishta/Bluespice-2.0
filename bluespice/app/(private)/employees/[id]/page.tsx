@@ -1,5 +1,5 @@
-// app/(private)/employees/[id]/page.tsx
 "use client";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Box,
@@ -8,13 +8,17 @@ import {
   Typography,
   Stack,
   Grid,
-  Divider,
   Chip,
 } from "@mui/material";
-import { Edit, ArrowBack } from "@mui/icons-material";
-import { useEmployee } from "@/hooks/useEmployees";
+import { Edit, ArrowBack, Delete } from "@mui/icons-material";
+import { useEmployee, useEmployees } from "@/hooks/useEmployees";
 import { usePermissions, PERMISSIONS } from "@/lib/permissions";
-import { LoadingSpinner, AccessDenied, StatusChip } from "@/components/common";
+import {
+  LoadingSpinner,
+  AccessDenied,
+  StatusChip,
+  ConfirmDialog,
+} from "@/components/common";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 
 export default function EmployeeDetailPage() {
@@ -22,8 +26,12 @@ export default function EmployeeDetailPage() {
   const router = useRouter();
   const employeeId = params.id as string;
   const { employee, isLoading, error } = useEmployee(employeeId);
+  const { deleteEmployee } = useEmployees();
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
   const { hasAccess: canUpdate } = usePermissions(PERMISSIONS.EMPLOYEES_UPDATE);
+  const { hasAccess: canDelete } = usePermissions(PERMISSIONS.EMPLOYEES_DELETE);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   if (!canView) {
     return <AccessDenied />;
@@ -52,6 +60,30 @@ export default function EmployeeDetailPage() {
 
   const profile = employee.profile;
 
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (employee) {
+      const result = await deleteEmployee(employee.id);
+      if (result.success) {
+        router.push("/employees");
+      } else {
+        setDeleteDialogOpen(false);
+      }
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+  };
+
+  const employeeName = profile
+    ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
+      employee.employee_id
+    : employee.employee_id;
+
   return (
     <Box>
       <Stack
@@ -78,6 +110,16 @@ export default function EmployeeDetailPage() {
               onClick={() => router.push(`/employees/${employee.id}/edit`)}
             >
               Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<Delete />}
+              onClick={handleDeleteClick}
+            >
+              Delete
             </Button>
           )}
         </Stack>
@@ -250,6 +292,17 @@ export default function EmployeeDetailPage() {
           </Paper>
         </Grid>
       </Grid>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Employee"
+        message={`Are you sure you want to delete "${employeeName}"? This action cannot be undone and will permanently remove all associated data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmColor="error"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </Box>
   );
 }

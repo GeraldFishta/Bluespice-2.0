@@ -21,7 +21,7 @@ interface EmployeeFormProps {
 export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
   const router = useRouter();
   const toast = useToast();
-  const { createEmployee, updateEmployee } = useEmployees();
+  const { updateEmployee } = useEmployees(); // Rimossa createEmployee non usata
   const { handleFormErrors, handleServerError } =
     useFormErrors<EmployeeFormData>();
 
@@ -33,15 +33,15 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
     formState: { errors, isSubmitting },
     reset,
   } = useForm<EmployeeFormData>({
-    resolver: yupResolver(employeeSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: yupResolver(employeeSchema) as any,
     defaultValues: {
       firstName: employee?.profile?.first_name || "",
       lastName: employee?.profile?.last_name || "",
       email: employee?.profile?.email || "",
-      phone: "",
       hireDate: employee?.profile?.hire_date
         ? new Date(employee.profile.hire_date).toISOString().split("T")[0]
-        : undefined,
+        : "",
       employeeId: employee?.employee_id || "",
       salary: employee?.salary || 0,
       hourlyRate: employee?.hourly_rate || null,
@@ -60,10 +60,9 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         firstName: employee.profile?.first_name || "",
         lastName: employee.profile?.last_name || "",
         email: employee.profile?.email || "",
-        phone: "",
         hireDate: employee.profile?.hire_date
           ? new Date(employee.profile.hire_date).toISOString().split("T")[0]
-          : undefined,
+          : "",
         employeeId: employee.employee_id || "",
         salary: employee.salary || 0,
         hourlyRate: employee.hourly_rate || null,
@@ -117,12 +116,55 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         router.push("/employees");
         onSuccess?.();
       } else {
-        // Create mode: for now, we need to create profile first
-        // This is a simplified version - in production you'd want to create auth user first
-        toast.error(
-          "Creating new employees requires profile setup. Please use the profile creation flow first."
-        );
-        // TODO: Implement full create flow with profile creation
+        // CREATE MODE: Call API route to create auth user, profile, and employee
+        try {
+          // Get current session token
+          const { data: session } = await supabase.auth.getSession();
+          if (!session?.session?.access_token) {
+            throw new Error("Not authenticated");
+          }
+
+          // Call API route
+          const response = await fetch("/api/employees/create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.session.access_token}`,
+            },
+            body: JSON.stringify({
+              email: sanitizedData.email,
+              firstName: sanitizedData.firstName,
+              lastName: sanitizedData.lastName,
+              employeeId: sanitizedData.employeeId,
+              salary: sanitizedData.salary,
+              hourlyRate: sanitizedData.hourlyRate,
+              employmentType: sanitizedData.employmentType,
+              department: sanitizedData.department,
+              position: sanitizedData.position,
+              role: sanitizedData.role,
+              hireDate: sanitizedData.hireDate,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || "Failed to create employee");
+          }
+
+          toast.success(
+            "Employee created successfully! They will receive an email to set their password."
+          );
+          router.push("/employees");
+          onSuccess?.();
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Failed to create employee";
+          toast.error(errorMessage);
+          handleServerError(error);
+        }
       }
     } catch (error) {
       handleServerError(error);
@@ -139,40 +181,34 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         {isEditMode ? "Edit Employee" : "Add Employee"}
       </Typography>
 
-      <Box component="form" onSubmit={handleSubmit(onSubmit, onError)}>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <Box component="form" onSubmit={handleSubmit(onSubmit as any, onError)}>
         <Stack spacing={3}>
           <Box>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Personal Information
             </Typography>
             <Stack spacing={2}>
-              <FormField
+              <FormField<EmployeeFormData>
                 name="firstName"
                 control={control}
                 label="First Name"
                 type="text"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="lastName"
                 control={control}
                 label="Last Name"
                 type="text"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="email"
                 control={control}
                 label="Email"
                 type="email"
                 required
-              />
-              <FormField
-                name="phone"
-                control={control}
-                label="Phone"
-                type="text"
-                placeholder="+39 123 456 7890"
               />
             </Stack>
           </Box>
@@ -184,21 +220,21 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
               Employment Details
             </Typography>
             <Stack spacing={2}>
-              <FormField
+              <FormField<EmployeeFormData>
                 name="employeeId"
                 control={control}
                 label="Employee ID"
                 type="text"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="hireDate"
                 control={control}
                 label="Hire Date"
                 type="date"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="department"
                 control={control}
                 label="Department"
@@ -213,14 +249,14 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
                 ]}
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="position"
                 control={control}
                 label="Position"
                 type="text"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="role"
                 control={control}
                 label="Role"
@@ -232,7 +268,7 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
                 ]}
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="employmentType"
                 control={control}
                 label="Employment Type"
@@ -245,7 +281,7 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
                 required
               />
               {isEditMode && (
-                <FormField
+                <FormField<EmployeeFormData>
                   name="status"
                   control={control}
                   label="Status"
@@ -268,14 +304,14 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
               Compensation
             </Typography>
             <Stack spacing={2}>
-              <FormField
+              <FormField<EmployeeFormData>
                 name="salary"
                 control={control}
                 label="Salary (EUR)"
                 type="number"
                 required
               />
-              <FormField
+              <FormField<EmployeeFormData>
                 name="hourlyRate"
                 control={control}
                 label="Hourly Rate (EUR)"

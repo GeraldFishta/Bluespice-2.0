@@ -19,17 +19,14 @@ export const employeeSchema = yup.object({
         .required("Email is required")
         .email("Invalid email address"),
 
-    phone: yup
-        .string()
-        .matches(
-            /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/,
-            "Invalid phone number"
-        ),
-
     hireDate: yup
-        .date()
+        .string()
         .required("Hire date is required")
-        .max(new Date(), "Hire date cannot be in the future"),
+        .test("is-valid-date", "Invalid date", (value) => {
+            if (!value) return false;
+            const date = new Date(value);
+            return !isNaN(date.getTime()) && date <= new Date();
+        }),
 
     employeeId: yup
         .string()
@@ -42,7 +39,11 @@ export const employeeSchema = yup.object({
         .positive("Salary must be positive")
         .min(0, "Salary must be at least 0"),
 
-    hourlyRate: yup.number().positive("Hourly rate must be positive").nullable(),
+    hourlyRate: yup
+        .number()
+        .positive("Hourly rate must be positive")
+        .nullable()
+        .notRequired(),
 
     employmentType: yup
         .string()
@@ -64,4 +65,17 @@ export const employeeSchema = yup.object({
         .required("Role is required"),
 });
 
-export type EmployeeFormData = yup.InferType<typeof employeeSchema>;
+export type EmployeeFormData = {
+    firstName: string;
+    lastName: string;
+    email: string;
+    hireDate: string;
+    employeeId: string;
+    salary: number;
+    hourlyRate?: number | null;
+    employmentType: "full-time" | "part-time" | "contract";
+    status: "active" | "inactive" | "terminated";
+    department: string;
+    position: string;
+    role: "admin" | "hr" | "employee";
+};

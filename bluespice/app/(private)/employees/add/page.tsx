@@ -2,8 +2,9 @@
 "use client";
 import { Box, Typography } from "@mui/material";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
-import { usePermissions, PERMISSIONS } from "@/lib/permissions";
+import { PERMISSIONS } from "@/lib/permissions";
 import { AccessDenied } from "@/components/common";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function AddEmployeePage() {
   const { hasAccess } = usePermissions(PERMISSIONS.EMPLOYEES_CREATE);

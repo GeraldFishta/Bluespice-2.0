@@ -21,9 +21,15 @@ import {
 } from "@mui/material";
 import { Add, Edit, Delete, Visibility, Search } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
-import { usePermissions, PERMISSIONS } from "@/lib/permissions";
-import { LoadingSpinner, AccessDenied, StatusChip } from "@/components/common";
-import { formatCurrency } from "@/utils/formatters";
+import { PERMISSIONS } from "@/lib/permissions";
+import {
+  LoadingSpinner,
+  AccessDenied,
+  StatusChip,
+  ConfirmDialog,
+} from "@/components/common";
+import { formatCurrency } from "@/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function EmployeesPage() {
   const router = useRouter();
@@ -35,6 +41,11 @@ export default function EmployeesPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   if (!canView) {
     return <AccessDenied />;
@@ -72,10 +83,24 @@ export default function EmployeesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this employee?")) {
-      await deleteEmployee(id);
+  const handleDeleteClick = (employee: { id: string; name: string }) => {
+    setEmployeeToDelete(employee);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (employeeToDelete) {
+      const result = await deleteEmployee(employeeToDelete.id);
+      if (result.success) {
+        setDeleteDialogOpen(false);
+        setEmployeeToDelete(null);
+      }
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setEmployeeToDelete(null);
   };
 
   return (
@@ -207,7 +232,15 @@ export default function EmployeesPage() {
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => handleDelete(employee.id)}
+                          onClick={() =>
+                            handleDeleteClick({
+                              id: employee.id,
+                              name:
+                                `${employee.profile?.first_name || ""} ${
+                                  employee.profile?.last_name || ""
+                                }`.trim() || employee.employee_id,
+                            })
+                          }
                         >
                           <Delete />
                         </IconButton>
@@ -220,6 +253,21 @@ export default function EmployeesPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Employee"
+        message={
+          employeeToDelete
+            ? `Are you sure you want to delete "${employeeToDelete.name}"? This action cannot be undone.`
+            : "Are you sure you want to delete this employee?"
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmColor="error"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </Box>
   );
 }
