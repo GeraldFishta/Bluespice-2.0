@@ -6,6 +6,7 @@ import { useAuth, hasRole } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import { LoadingSpinner } from "@/components/common";
 
 // Optionally, pages inside this layout can rely on future per-route RBAC.
 const ALLOWED_ROLES: string[] | undefined = undefined;
@@ -26,7 +27,7 @@ export default function PrivateLayout({
     }
   }, [loading, user, router]);
 
-  if (loading) return null;
+  if (loading) return <LoadingSpinner fullScreen message="Loading..." />;
   if (!user) return null;
 
   if (!hasRole(role, ALLOWED_ROLES)) {

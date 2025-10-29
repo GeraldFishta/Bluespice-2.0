@@ -1,6 +1,7 @@
 // lib/axios.ts
 import axios from "axios";
 import { supabase } from "./supabase";
+import { validateJWT } from "./jwt-security";
 
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || "",
@@ -17,7 +18,17 @@ api.interceptors.request.use(
             data: { session },
         } = await supabase.auth.getSession();
         if (session?.access_token) {
-            config.headers.Authorization = `Bearer ${session.access_token}`;
+            // Validate JWT before attaching
+            if (validateJWT(session.access_token)) {
+                config.headers.Authorization = `Bearer ${session.access_token}`;
+            } else {
+                // Token invalid - logout and redirect
+                await supabase.auth.signOut();
+                if (typeof window !== "undefined") {
+                    window.location.href = "/login";
+                }
+                return Promise.reject(new Error("Invalid JWT token"));
+            }
         }
         return config;
     },

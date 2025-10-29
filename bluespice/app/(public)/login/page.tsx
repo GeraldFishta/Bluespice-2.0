@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/useToast";
+import { sanitizeEmail } from "@/lib/sanitization";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -57,8 +58,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Sanitize email input
+      const sanitizedEmail = sanitizeEmail(email);
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: sanitizedEmail,
         password,
       });
 
