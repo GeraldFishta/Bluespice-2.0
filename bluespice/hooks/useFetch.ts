@@ -1,8 +1,11 @@
 // hooks/useFetch.ts
-import useSWR from "swr";
+import useSWR, { type SWRConfiguration } from "swr";
 import { fetcher } from "@/lib/swr-config";
 
-export function useFetch<T = any>(url: string | null, options?: any) {
+export function useFetch<T = unknown>(
+    url: string | null,
+    options?: SWRConfiguration<T>
+) {
     const { data, error, isLoading, mutate } = useSWR<T>(url, fetcher, options);
 
     return {
