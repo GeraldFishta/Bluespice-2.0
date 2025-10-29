@@ -726,6 +726,167 @@ hooks/
 7. **SEO Friendly**: Use descriptive URLs and meta tags
 8. **Accessibility**: Implement proper ARIA labels and keyboard navigation
 
+## App Router: Route Groups, Layout Guards, and Registry vs Dynamic Routes
+
+### Route Groups Structure (Explicit Example)
+
+```text
+app/
+├── (auth)/
+│   ├── login/
+│   │   └── page.tsx
+│   └── signup/
+│       └── page.tsx
+├── (dashboard)/                 # Protected area (single auth guard here)
+│   ├── layout.tsx               # Route-group layout (Auth + Role guard)
+│   ├── page.tsx                 # Dashboard home ("/dashboard")
+│   ├── employees/               # Registry entry: "/employees"
+│   │   ├── page.tsx             # List (static)
+│   │   ├── add/
+│   │   │   └── page.tsx         # Create (static)
+│   │   └── [id]/                # Detail (dynamic!)
+│   │       └── page.tsx
+│   ├── payroll/                 # Registry entry: "/payroll"
+│   │   ├── page.tsx
+│   │   └── [periodId]/          # Dynamic period
+│   │       └── page.tsx
+│   └── reports/                 # Registry entry: "/reports"
+│       └── page.tsx
+└── layout.tsx                   # Root layout (theme, providers)
+```
+
+### Layout Guard Applied at Route Group Level
+
+```tsx
+// app/(dashboard)/layout.tsx
+"use client";
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { Box, CircularProgress } from "@mui/material";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission } from "@/lib/navigation";
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    // Optional: example role-based section restriction
+    if (
+      pathname.startsWith("/settings") &&
+      !hasPermission(user.role, ["admin"])
+    ) {
+      router.push("/unauthorized");
+    }
+  }, [loading, user, pathname, router]);
+
+  if (loading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!user) return null;
+
+  return <div className="dashboard-layout">{children}</div>;
+}
+```
+
+Nota: proteggiamo tutto il gruppo `(dashboard)` una sola volta qui. Le pagine interne restano pulite.
+
+### Registry vs Dynamic Routes (Chiarezza Operativa)
+
+- Il `navigationRegistry` elenca SOLO voci di navigazione ancorate (entry points) che vuoi mostrare in sidebar, navbar, breadcrumbs statici.
+- Le route dinamiche (es. `/employees/[id]`, `/payroll/[periodId]`) NON devono essere registrate: le gestisce Next.js e le breadcrumbs vengono già coperte da `getBreadcrumbs` con fallback leggibile.
+- Esempio di registry coerente con l’albero sopra:
+
+```ts
+// lib/navigation.js (estratto)
+export const navigationRegistry = {
+  dashboard: {
+    path: "/dashboard",
+    label: "Dashboard",
+    icon: "Dashboard",
+    permissions: ["admin", "hr", "employee"],
+    order: 1,
+  },
+  employees: {
+    path: "/employees",
+    label: "Employees",
+    icon: "People",
+    permissions: ["admin", "hr"],
+    order: 2,
+    children: {
+      list: {
+        path: "/employees",
+        label: "All Employees",
+        permissions: ["admin", "hr"],
+      },
+      add: {
+        path: "/employees/add",
+        label: "Add Employee",
+        permissions: ["admin"],
+      },
+      // Niente "/employees/[id]" qui → è dinamica
+    },
+  },
+  payroll: {
+    path: "/payroll",
+    label: "Payroll",
+    icon: "Payment",
+    permissions: ["admin", "hr"],
+    order: 3,
+  },
+  reports: {
+    path: "/reports",
+    label: "Reports",
+    icon: "Assessment",
+    permissions: ["admin", "hr"],
+    order: 4,
+  },
+  settings: {
+    path: "/settings",
+    label: "Settings",
+    icon: "Settings",
+    permissions: ["admin"],
+    order: 5,
+  },
+};
+```
+
+### Breadcrumbs con dinamiche
+
+`getBreadcrumbs(pathname)` già:
+
+- cerca match diretti in `navigationRegistry` e nei `children`;
+- fa fallback con capitalizzazione per segmenti dinamici (es. `/employees/123` → `Employees / 123`).
+
+Se vuoi label più amichevoli per dinamiche (es. nome dipendente), usa un wrapper opzionale che risolve i segmenti dinamici con dati runtime (SWR/fetch) e sostituisce l’ultimo label, lasciando intatto il registry.
+
+### TL;DR
+
+- Route groups `(auth)` e `(dashboard)` organizzano e proteggono aree.
+- Il guard sta nel `layout.tsx` del gruppo, una volta sola.
+- Il registry mappa solo voci di navigazione stabili; le dinamiche restano fuori.
+- Le breadcrumbs gestiscono i segmenti dinamici in modo agnostico, con possibilità di arricchimento runtime.
+
 # Navigation Rules - Bluespice 2.0
 
 ## Overview

@@ -8,8 +8,8 @@
 - [x] ✅ Next.js project setup
 - [x] ✅ Supabase client configuration
 - [x] ✅ Dependencies installation
-- [ ] 🔧 MUI Theme setup & provider
-- [ ] 🔧 Environment variables configuration
+- [x] ✅ MUI Theme setup & provider
+- [x] ✅ Environment variables configuration
 - [ ] 🔧 Path aliases setup (@/ imports)
 - [ ] 🔧 ESLint/Prettier configuration
 
