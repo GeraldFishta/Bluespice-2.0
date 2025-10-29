@@ -1,6 +1,6 @@
 // components/common/StatusChip.tsx
 import { Chip, ChipProps } from "@mui/material";
-import { CheckCircle, Cancel, Pending, Alert } from "@mui/icons-material";
+import { CheckCircle, Cancel, Pending, Error } from "@mui/icons-material";
 
 type StatusType = "active" | "inactive" | "pending" | "approved" | "rejected";
 
@@ -36,7 +36,7 @@ const statusConfig: Record<
   rejected: {
     label: "Rejected",
     color: "error",
-    icon: <Alert />,
+    icon: <Error />,
   },
 };
 
