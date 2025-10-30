@@ -7,7 +7,7 @@ import { useToast } from "./useToast";
 
 export interface Employee {
     id: string;
-    profile_id: string;
+    profile_id?: string; // optional when reading from view
     employee_id: string;
     salary: number;
     hourly_rate: number | null;
@@ -47,41 +47,72 @@ interface EmployeeUpdateData {
     manager_id?: string;
 }
 
-// SWR key for employees list
-const EMPLOYEES_KEY = "employees";
-
-// Supabase fetcher for employees
-const fetchEmployees = async (): Promise<Employee[]> => {
-    const { data, error } = await supabase
-        .from("employees")
-        .select(
-            `
-      *,
-      profile:profiles!profile_id (
-        first_name,
-        last_name,
-        email,
-        role,
-        department,
-        position,
-        hire_date
-      )
-    `
-        )
-        .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+// Filter/sort/pagination params for list
+type EmployeeFilters = {
+    search?: string;
+    status?: "all" | "active" | "inactive" | "terminated";
+    employmentType?: "all" | "full-time" | "part-time" | "contract";
+    sort?: string; // e.g., 'created_at' | 'employee_id'
+    dir?: "asc" | "desc";
+    page?: number;
+    pageSize?: number;
 };
 
-export function useEmployees() {
+// SWR key generator to avoid overfetch and ensure cache correctness
+const employeesKey = (p: EmployeeFilters) => [
+    "employees",
+    p.search || "",
+    p.status || "all",
+    p.employmentType || "all",
+    p.sort || "created_at",
+    p.dir || "desc",
+    p.page || 1,
+    p.pageSize || 20,
+];
+
+// Supabase fetcher for employees with filters/pagination (reads from view)
+const fetchEmployeesWithParams = async (p: EmployeeFilters): Promise<{ data: Employee[]; count: number | null; }> => {
+    const {
+        search,
+        status = "all",
+        employmentType = "all",
+        sort = "created_at",
+        dir = "desc",
+        page = 1,
+        pageSize = 20,
+    } = p;
+
+    let q = supabase.from("employee_dto_v1").select("*", { count: "exact" });
+
+    if (search) {
+        q = q.or(
+            `employee_id.ilike.%${search}%,` +
+            `profile->>first_name.ilike.%${search}%,` +
+            `profile->>last_name.ilike.%${search}%,` +
+            `profile->>email.ilike.%${search}%`
+        );
+    }
+    if (status !== "all") q = q.eq("status", status);
+    if (employmentType !== "all") q = q.eq("employment_type", employmentType);
+
+    q = q.order(sort, { ascending: dir === "asc" });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    q = q.range(from, to);
+
+    const { data, error, count } = await q;
+    if (error) throw error;
+    return { data: (data as Employee[]) || [], count: count ?? null };
+};
+
+export function useEmployees(params: EmployeeFilters = {}) {
     const toast = useToast();
-    const { data: employees, isLoading, error, mutate: refetch } = useSWR<Employee[]>(
-        EMPLOYEES_KEY,
-        fetchEmployees,
-        {
-            revalidateOnFocus: false,
-        }
+    const key = employeesKey(params);
+    const { data, isLoading, error, mutate: refetch } = useSWR<{ data: Employee[]; count: number | null }>(
+        key,
+        () => fetchEmployeesWithParams(params),
+        { revalidateOnFocus: false }
     );
 
     const createEmployee = async (employeeData: EmployeeCreateData) => {
@@ -94,8 +125,8 @@ export function useEmployees() {
 
             if (error) throw error;
 
-            // Invalidate cache
-            mutate(EMPLOYEES_KEY);
+            // Invalidate all employees caches
+            mutate((k) => Array.isArray(k) && k[0] === "employees");
             toast.success("Employee created successfully!");
             return { success: true, data };
         } catch (error: unknown) {
@@ -116,8 +147,8 @@ export function useEmployees() {
 
             if (error) throw error;
 
-            // Invalidate cache
-            mutate(EMPLOYEES_KEY);
+            // Invalidate all employees caches
+            mutate((k) => Array.isArray(k) && k[0] === "employees");
             toast.success("Employee updated successfully!");
             return { success: true, data };
         } catch (error: unknown) {
@@ -133,8 +164,8 @@ export function useEmployees() {
 
             if (error) throw error;
 
-            // Invalidate cache
-            mutate(EMPLOYEES_KEY);
+            // Invalidate all employees caches
+            mutate((k) => Array.isArray(k) && k[0] === "employees");
             toast.success("Employee deleted successfully!");
             return { success: true };
         } catch (error: unknown) {
@@ -145,7 +176,8 @@ export function useEmployees() {
     };
 
     return {
-        employees: employees || [],
+        employees: data?.data || [],
+        total: data?.count ?? null,
         isLoading,
         error,
         mutate: refetch,
@@ -161,26 +193,13 @@ export function useEmployee(id: string | null) {
         if (!id) return null;
 
         const { data, error } = await supabase
-            .from("employees")
-            .select(
-                `
-        *,
-      profile:profiles!profile_id (
-          first_name,
-          last_name,
-          email,
-          role,
-          department,
-          position,
-          hire_date
-        )
-      `
-            )
+            .from("employee_dto_v1")
+            .select("*")
             .eq("id", id)
             .single();
 
         if (error) throw error;
-        return data || null;
+        return (data as Employee) || null;
     };
 
     const { data: employee, isLoading, error } = useSWR<Employee | null>(

@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { Add, Edit, Delete, Visibility, Search } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   LoadingSpinner,
@@ -33,14 +34,23 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export default function EmployeesPage() {
   const router = useRouter();
-  const { employees, isLoading, error, deleteEmployee } = useEmployees();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "inactive" | "terminated"
+  >("all");
+
+  // Debounce search input to avoid spamming queries
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
+
+  const { employees, isLoading, error, deleteEmployee } = useEmployees({
+    search: debouncedSearch,
+    status: statusFilter,
+  });
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
   const { hasAccess: canCreate } = usePermissions(PERMISSIONS.EMPLOYEES_CREATE);
   const { hasAccess: canUpdate } = usePermissions(PERMISSIONS.EMPLOYEES_UPDATE);
   const { hasAccess: canDelete } = usePermissions(PERMISSIONS.EMPLOYEES_DELETE);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<{
     id: string;
@@ -65,23 +75,8 @@ export default function EmployeesPage() {
     );
   }
 
-  // Filter employees
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      searchTerm === "" ||
-      emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.profile?.first_name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      emp.profile?.last_name
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      emp.profile?.email?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "all" || emp.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
+  // Data already filtered server-side via useEmployees params
+  const filteredEmployees = employees;
 
   const handleDeleteClick = (employee: { id: string; name: string }) => {
     setEmployeeToDelete(employee);
@@ -142,7 +137,11 @@ export default function EmployeesPage() {
             select
             label="Status"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value as "all" | "active" | "inactive" | "terminated"
+              )
+            }
             sx={{ minWidth: 150 }}
           >
             <MenuItem value="all">All</MenuItem>

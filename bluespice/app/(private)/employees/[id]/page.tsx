@@ -1,9 +1,15 @@
 "use client";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Box, Button, Paper, Typography, Stack, Chip } from "@mui/material";
-// import Grid from "@mui/material/Grid";
-import Grid from "@mui/system/Unstable_Grid";
+import {
+  Box,
+  Button,
+  Paper,
+  Typography,
+  Stack,
+  Chip,
+  Grid,
+} from "@mui/material";
 import { Edit, ArrowBack, Delete } from "@mui/icons-material";
 import { useEmployee, useEmployees } from "@/hooks/useEmployees";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -29,13 +35,8 @@ export default function EmployeeDetailPage() {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  if (!canView) {
-    return <AccessDenied />;
-  }
-
-  if (isLoading) {
-    return <LoadingSpinner message="Loading employee..." />;
-  }
+  if (!canView) return <AccessDenied />;
+  if (isLoading) return <LoadingSpinner message="Loading employee..." />;
 
   if (error || !employee) {
     return (
@@ -56,32 +57,20 @@ export default function EmployeeDetailPage() {
 
   const profile = employee.profile;
 
-  const handleDeleteClick = () => {
-    setDeleteDialogOpen(true);
-  };
-
   const handleDeleteConfirm = async () => {
-    if (employee) {
-      const result = await deleteEmployee(employee.id);
-      if (result.success) {
-        router.push("/employees");
-      } else {
-        setDeleteDialogOpen(false);
-      }
-    }
+    const result = await deleteEmployee(employee.id);
+    if (result.success) router.push("/employees");
+    else setDeleteDialogOpen(false);
   };
 
-  const handleDeleteCancel = () => {
-    setDeleteDialogOpen(false);
-  };
-
-  const employeeName = profile
-    ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
-      employee.employee_id
-    : employee.employee_id;
+  const employeeName =
+    profile?.first_name || profile?.last_name
+      ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim()
+      : employee.employee_id;
 
   return (
     <Box>
+      {/* Header */}
       <Stack
         direction="row"
         justifyContent="space-between"
@@ -91,6 +80,7 @@ export default function EmployeeDetailPage() {
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Employee Details
         </Typography>
+
         <Stack direction="row" spacing={2}>
           <Button
             variant="outlined"
@@ -99,6 +89,7 @@ export default function EmployeeDetailPage() {
           >
             Back
           </Button>
+
           {canUpdate && (
             <Button
               variant="contained"
@@ -108,12 +99,13 @@ export default function EmployeeDetailPage() {
               Edit
             </Button>
           )}
+
           {canDelete && (
             <Button
               variant="outlined"
               color="error"
               startIcon={<Delete />}
-              onClick={handleDeleteClick}
+              onClick={() => setDeleteDialogOpen(true)}
             >
               Delete
             </Button>
@@ -121,73 +113,38 @@ export default function EmployeeDetailPage() {
         </Stack>
       </Stack>
 
+      {/* Content */}
       <Grid container spacing={3}>
         {/* Personal Information */}
-        <Grid xs={12} md={6}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Personal Information
             </Typography>
             <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Full Name
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {profile?.first_name} {profile?.last_name}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Email
-                </Typography>
-                <Typography variant="body1">{profile?.email}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Employee ID
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  {employee.employee_id}
-                </Typography>
-              </Box>
+              <Info label="Full Name">
+                {profile?.first_name} {profile?.last_name}
+              </Info>
+              <Info label="Email">{profile?.email}</Info>
+              <Info label="Employee ID" bold>
+                {employee.employee_id}
+              </Info>
               {profile?.hire_date && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Hire Date
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(profile.hire_date)}
-                  </Typography>
-                </Box>
+                <Info label="Hire Date">{formatDate(profile.hire_date)}</Info>
               )}
             </Stack>
           </Paper>
         </Grid>
 
         {/* Employment Details */}
-        <Grid xs={12} md={6}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Employment Details
             </Typography>
             <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Department
-                </Typography>
-                <Typography variant="body1">
-                  {profile?.department || "-"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Position
-                </Typography>
-                <Typography variant="body1">
-                  {profile?.position || "-"}
-                </Typography>
-              </Box>
+              <Info label="Department">{profile?.department || "-"}</Info>
+              <Info label="Position">{profile?.position || "-"}</Info>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Role
@@ -233,57 +190,35 @@ export default function EmployeeDetailPage() {
         </Grid>
 
         {/* Compensation */}
-        <Grid xs={12} md={6}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Compensation
             </Typography>
             <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Salary
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {formatCurrency(employee.salary)}
-                </Typography>
-              </Box>
+              <Info label="Salary" bold>
+                {formatCurrency(employee.salary)}
+              </Info>
               {employee.hourly_rate && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Hourly Rate
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatCurrency(employee.hourly_rate)}/hour
-                  </Typography>
-                </Box>
+                <Info label="Hourly Rate">
+                  {formatCurrency(employee.hourly_rate)}/hour
+                </Info>
               )}
             </Stack>
           </Paper>
         </Grid>
 
         {/* Additional Info */}
-        <Grid xs={12} md={6}>
+        <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Additional Information
             </Typography>
             <Stack spacing={2}>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Created At
-                </Typography>
-                <Typography variant="body1">
-                  {formatDate(employee.created_at)}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Last Updated
-                </Typography>
-                <Typography variant="body1">
-                  {formatDate(employee.updated_at)}
-                </Typography>
-              </Box>
+              <Info label="Created At">{formatDate(employee.created_at)}</Info>
+              <Info label="Last Updated">
+                {formatDate(employee.updated_at)}
+              </Info>
             </Stack>
           </Paper>
         </Grid>
@@ -297,8 +232,33 @@ export default function EmployeeDetailPage() {
         cancelText="Cancel"
         confirmColor="error"
         onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
+        onCancel={() => setDeleteDialogOpen(false)}
       />
+    </Box>
+  );
+}
+
+/* Small helper subcomponent to reduce repetition */
+function Info({
+  label,
+  children,
+  bold = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  bold?: boolean;
+}) {
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        variant="body1"
+        sx={{ fontWeight: bold ? 500 : "normal", wordBreak: "break-word" }}
+      >
+        {children}
+      </Typography>
     </Box>
   );
 }
