@@ -1,0 +1,12 @@
+{
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "Supabase Bluespice Connect",
+            "connectString": "postgresql://postgres.ypfxybtjmztfcadmnqnk:ofonMKnvApwe8wGn@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+        }
+    ]
+}

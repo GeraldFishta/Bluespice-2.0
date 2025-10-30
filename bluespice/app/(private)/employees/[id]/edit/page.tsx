@@ -4,8 +4,9 @@ import { useParams } from "next/navigation";
 import { Box, Typography } from "@mui/material";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { useEmployee } from "@/hooks/useEmployees";
-import { usePermissions, PERMISSIONS } from "@/lib/permissions";
+import { PERMISSIONS } from "@/lib/permissions";
 import { AccessDenied, LoadingSpinner } from "@/components/common";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function EditEmployeePage() {
   const params = useParams();

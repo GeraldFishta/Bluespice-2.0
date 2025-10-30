@@ -1,18 +1,14 @@
 "use client";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Box,
-  Button,
-  Paper,
-  Typography,
-  Stack,
-  Grid,
-  Chip,
-} from "@mui/material";
+import { Box, Button, Paper, Typography, Stack, Chip } from "@mui/material";
+// import Grid from "@mui/material/Grid";
+import Grid from "@mui/system/Unstable_Grid";
 import { Edit, ArrowBack, Delete } from "@mui/icons-material";
 import { useEmployee, useEmployees } from "@/hooks/useEmployees";
-import { usePermissions, PERMISSIONS } from "@/lib/permissions";
+import { PERMISSIONS } from "@/lib/permissions";
+import { usePermissions } from "@/hooks/usePermissions";
+
 import {
   LoadingSpinner,
   AccessDenied,
@@ -127,7 +123,7 @@ export default function EmployeeDetailPage() {
 
       <Grid container spacing={3}>
         {/* Personal Information */}
-        <Grid item xs={12} md={6}>
+        <Grid xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Personal Information
@@ -170,7 +166,7 @@ export default function EmployeeDetailPage() {
         </Grid>
 
         {/* Employment Details */}
-        <Grid item xs={12} md={6}>
+        <Grid xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Employment Details
@@ -237,7 +233,7 @@ export default function EmployeeDetailPage() {
         </Grid>
 
         {/* Compensation */}
-        <Grid item xs={12} md={6}>
+        <Grid xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Compensation
@@ -266,7 +262,7 @@ export default function EmployeeDetailPage() {
         </Grid>
 
         {/* Additional Info */}
-        <Grid item xs={12} md={6}>
+        <Grid xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
               Additional Information
