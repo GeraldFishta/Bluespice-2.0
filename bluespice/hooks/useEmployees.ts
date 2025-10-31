@@ -10,25 +10,27 @@ import { supabase } from "@/lib/supabase";
 
 export interface Employee {
     id: string;
-    profile_id?: string; // optional when reading from view
+    profile_id?: string;
     employee_id: string;
     salary: number;
     hourly_rate: number | null;
     employment_type: "full-time" | "part-time" | "contract";
     status: "active" | "inactive" | "terminated";
     manager_id: string | null;
+    // ✅ NUOVO: Questi campi ora sono direttamente su Employee
+    department: string | null;
+    position: string | null;
+    hire_date: string | null;
     created_at: string;
     updated_at: string;
-    // Joined with profiles
+    // Joined with profiles (senza department, position, hire_date)
     profile?: {
-        id: string; // Profile ID (included in view JSONB)
+        id: string;
         first_name: string;
         last_name: string;
         email: string;
         role: string;
-        department: string | null;
-        position: string | null;
-        hire_date: string | null;
+        // ❌ RIMOSSI: department, position, hire_date (ora sono in Employee)
     };
 }
 

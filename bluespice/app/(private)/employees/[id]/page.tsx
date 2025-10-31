@@ -173,8 +173,8 @@ export default function EmployeeDetailPage() {
               <Info label="Employee ID" bold>
                 {employee.employee_id}
               </Info>
-              {profile?.hire_date && (
-                <Info label="Hire Date">{formatDate(profile.hire_date)}</Info>
+              {employee.hire_date && (
+                <Info label="Hire Date">{formatDate(employee.hire_date)}</Info>
               )}
             </Stack>
           </Paper>
@@ -187,8 +187,8 @@ export default function EmployeeDetailPage() {
               Employment Details
             </Typography>
             <Stack spacing={2}>
-              <Info label="Department">{profile?.department || "-"}</Info>
-              <Info label="Position">{profile?.position || "-"}</Info>
+              <Info label="Department">{employee.department || "-"}</Info>
+              <Info label="Position">{employee.position || "-"}</Info>
               <Box>
                 <Typography variant="body2" color="text.secondary">
                   Role

@@ -70,15 +70,15 @@
 - [x] ✅ Employee form (create/edit) - `components/employees/EmployeeForm.tsx`
 - [x] ✅ Employee filters & search - implementato
 - [x] ✅ Employee status management - implementato
-- [x] 🔧 Employee profile management - collegamento profiles <-> employees (parziale)
+- [x] ✅ Employee profile management - collegamento profiles <-> employees (completo: FK, UNIQUE constraint, view, CRUD, RLS)
 
 ### **3.2 Employee Features**
 
 - [ ] 👥 Employee import/export
-- [ ] 👥 Employee hierarchy (manager relationships)
+- [x] ✅ Employee hierarchy (manager relationships) - implementato via manager_id FK
 - [ ] 👥 Employee documents upload
 - [ ] 👥 Employee history tracking
-- [ ] 👥 Employee permissions management
+- [x] ✅ Employee permissions management - implementato via RLS policies + RBAC
 
 ## 📋 **Phase 4: Payroll System** (Week 4)
 

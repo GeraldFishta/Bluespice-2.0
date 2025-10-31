@@ -40,16 +40,16 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
       firstName: employee?.profile?.first_name || "",
       lastName: employee?.profile?.last_name || "",
       email: employee?.profile?.email || "",
-      hireDate: employee?.profile?.hire_date
-        ? new Date(employee.profile.hire_date).toISOString().split("T")[0]
+      hireDate: employee?.hire_date
+        ? new Date(employee.hire_date).toISOString().split("T")[0]
         : "",
       employeeId: employee?.employee_id || "",
       salary: employee?.salary || 0,
       hourlyRate: employee?.hourly_rate || null,
       employmentType: employee?.employment_type || "full-time",
       status: employee?.status || "active",
-      department: employee?.profile?.department || "",
-      position: employee?.profile?.position || "",
+      department: employee?.department || "",
+      position: employee?.position || "",
       role:
         (employee?.profile?.role as "admin" | "hr" | "employee") || "employee",
     },
@@ -61,16 +61,16 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         firstName: employee.profile?.first_name || "",
         lastName: employee.profile?.last_name || "",
         email: employee.profile?.email || "",
-        hireDate: employee.profile?.hire_date
-          ? new Date(employee.profile.hire_date).toISOString().split("T")[0]
+        hireDate: employee.hire_date
+          ? new Date(employee.hire_date).toISOString().split("T")[0]
           : "",
         employeeId: employee.employee_id || "",
         salary: employee.salary || 0,
         hourlyRate: employee.hourly_rate || null,
         employmentType: employee.employment_type || "full-time",
         status: employee.status || "active",
-        department: employee.profile?.department || "",
-        position: employee.profile?.position || "",
+        department: employee.department || "",
+        position: employee.position || "",
         role:
           (employee.profile?.role as "admin" | "hr" | "employee") || "employee",
       });
@@ -99,12 +99,8 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
             first_name: sanitizedData.firstName,
             last_name: sanitizedData.lastName,
             email: sanitizedData.email,
-            department: sanitizedData.department,
-            position: sanitizedData.position,
             role: sanitizedData.role,
-            hire_date: sanitizedData.hireDate
-              ? new Date(sanitizedData.hireDate).toISOString()
-              : null,
+            // department, position, hire_date rimossi (ora in employees)
           })
           .eq("id", profileId);
 
@@ -118,6 +114,12 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
           hourly_rate: sanitizedData.hourlyRate || null,
           employment_type: sanitizedData.employmentType,
           status: sanitizedData.status,
+          // ✅ AGGIUNGI: department, position, hire_date ora sono qui
+          department: sanitizedData.department,
+          position: sanitizedData.position,
+          hire_date: sanitizedData.hireDate
+            ? new Date(sanitizedData.hireDate).toISOString()
+            : null,
         });
 
         if (!result.success)

@@ -82,17 +82,15 @@ export async function POST(request: NextRequest) {
         // Step 2: Wait a moment for trigger to create profile
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Step 3: Update profile with full info
+        // Step 3: Update profile with full info (senza department, position, hire_date)
         const { error: profileError } = await supabaseAdmin
             .from("profiles")
             .update({
                 first_name: firstName,
                 last_name: lastName,
                 email: email,
-                department: department || null,
-                position: position || null,
                 role: role || "employee",
-                hire_date: hireDate ? new Date(hireDate).toISOString() : null,
+                // department, position, hire_date rimossi (ora in employees)
             })
             .eq("id", profileId);
 
@@ -106,9 +104,7 @@ export async function POST(request: NextRequest) {
                     first_name: firstName,
                     last_name: lastName,
                     role: role || "employee",
-                    department: department || null,
-                    position: position || null,
-                    hire_date: hireDate ? new Date(hireDate).toISOString() : null,
+                    // department, position, hire_date rimossi (ora in employees)
                 });
 
             if (createProfileError) {
@@ -121,7 +117,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Step 4: Create employee record
+        // Step 4: Create employee record (con department, position, hire_date)
         const { data: employeeData, error: employeeError } = await supabaseAdmin
             .from("employees")
             .insert({
@@ -131,6 +127,10 @@ export async function POST(request: NextRequest) {
                 hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
                 employment_type: employmentType,
                 status: "active",
+                // ✅ AGGIUNGI: department, position, hire_date (spostati da profiles)
+                department: department || null,
+                position: position || null,
+                hire_date: hireDate ? new Date(hireDate).toISOString() : null,
             })
             .select()
             .single();

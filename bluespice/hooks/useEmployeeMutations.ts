@@ -17,8 +17,13 @@ interface EmployeeCreateData {
   employment_type: "full-time" | "part-time" | "contract";
   status?: "active" | "inactive" | "terminated";
   manager_id?: string;
+  // ✅ AGGIUNGI: department, position, hire_date (spostati da profiles)
+  department?: string | null;
+  position?: string | null;
+  hire_date?: string | null;
 }
 
+// ✅ NUOVO
 interface EmployeeUpdateData {
   employee_id?: string;
   salary?: number;
@@ -26,6 +31,10 @@ interface EmployeeUpdateData {
   employment_type?: "full-time" | "part-time" | "contract";
   status?: "active" | "inactive" | "terminated";
   manager_id?: string;
+  // ✅ AGGIUNGI: department, position, hire_date (spostati da profiles)
+  department?: string | null;
+  position?: string | null;
+  hire_date?: string | null;
 }
 
 /**
