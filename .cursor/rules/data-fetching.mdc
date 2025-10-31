@@ -1,13 +1,12 @@
 ---
-description: SWR for GET caching, Axios for mutations, JWT auto-attach, mutate() invalidation
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Data Fetching Rules - Bluespice 2.0
 
 ## Overview
 
-SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pessimistic updates, and centralized error handling for the Bluespice payroll application.
+SWR for GET requests and caching, Supabase for mutations with separated hooks pattern, pessimistic updates, centralized cache management, and centralized error handling for the Bluespice payroll application.
 
 ## Core Principles
 
@@ -18,19 +17,19 @@ SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pess
 - Implement automatic revalidation strategies
 - Handle loading and error states uniformly
 
-### 2. Axios for Mutations
+### 2. Separated Hooks Pattern
 
-- Use Axios for all POST, PUT, DELETE operations
-- Auto-attach JWT tokens via interceptors
-- Implement pessimistic updates (no optimistic)
-- Invalidate SWR cache after successful mutations
+- **CRITICAL**: Always separate data fetching hooks from mutation hooks
+- Data fetching hooks (`useEmployees`, `usePayroll`) → Data fetching ONLY
+- Mutation hooks (`useEmployeeMutations`, `usePayrollMutations`) → Mutations ONLY
+- This prevents unnecessary fetches when you only need mutations
 
-### 3. Cache Management
+### 3. Centralized Cache Management
 
-- Use `mutate()` to invalidate cache after mutations
+- Use centralized cache modules in `lib/cache/` organized by feature
+- Don't use `mutate()` directly in components or mutation hooks
+- Use cache modules like `employeesCache.invalidateEmployee(id)`
 - Implement selective cache invalidation
-- Avoid optimistic updates for payroll data
-- Handle cache consistency across components
 
 ### 4. Error Handling
 
@@ -40,6 +39,230 @@ SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pess
 - User-friendly error messages
 
 ## Patterns & Examples
+
+### Separation of Data Fetching and Mutations
+
+**CRITICAL**: Always separate data fetching hooks from mutation hooks. This prevents unnecessary fetches when you only need mutations.
+
+```javascript
+// ✅ GOOD: Separated hooks pattern
+// hooks/useEmployees.ts - Data fetching ONLY
+"use client";
+import useSWR from "swr";
+import { supabase } from "@/lib/supabase";
+
+export function useEmployees(params = {}) {
+  const key = employeesKey(params);
+  const {
+    data,
+    isLoading,
+    error,
+    mutate: refetch,
+  } = useSWR(key, () => fetchEmployeesWithParams(params), {
+    revalidateOnFocus: false,
+  });
+
+  return {
+    employees: data?.data || [],
+    total: data?.count ?? null,
+    isLoading,
+    error,
+    mutate: refetch,
+    // NO mutations here - use useEmployeeMutations() instead
+  };
+}
+
+// hooks/useEmployeeMutations.ts - Mutations ONLY
+("use client");
+import { supabase } from "@/lib/supabase";
+import { useToast } from "./useToast";
+import { employeesCache } from "@/lib/cache";
+
+export function useEmployeeMutations() {
+  const toast = useToast();
+
+  const createEmployee = async (employeeData) => {
+    try {
+      const { data, error } = await supabase
+        .from("employees")
+        .insert(employeeData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Use centralized cache module
+      employeesCache.invalidateEmployeeLists();
+      toast.success("Employee created successfully!");
+      return { success: true, data };
+    } catch (error) {
+      toast.error(error.message || "Failed to create employee");
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateEmployee = async (id, employeeData) => {
+    try {
+      const { data, error } = await supabase
+        .from("employees")
+        .update(employeeData)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      employeesCache.invalidateEmployee(id);
+      toast.success("Employee updated successfully!");
+      return { success: true, data };
+    } catch (error) {
+      toast.error(error.message || "Failed to update employee");
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteEmployee = async (id) => {
+    try {
+      const { error } = await supabase.from("employees").delete().eq("id", id);
+
+      if (error) throw error;
+
+      employeesCache.invalidateEmployeeLists();
+      toast.success("Employee deleted successfully!");
+      return { success: true };
+    } catch (error) {
+      toast.error(error.message || "Failed to delete employee");
+      return { success: false, error: error.message };
+    }
+  };
+
+  return {
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
+    // NO data fetching - use useEmployees() instead
+  };
+}
+
+// Usage examples:
+// ✅ GOOD: Only fetch what you need
+const EmployeeDetailPage = () => {
+  const { employee } = useEmployee(id); // Fetch single employee
+  const { deleteEmployee } = useEmployeeMutations(); // Only mutations, no fetch
+  // No unnecessary list fetch!
+};
+
+// ✅ GOOD: Fetch list when needed
+const EmployeesListPage = () => {
+  const { employees, isLoading } = useEmployees({ page: 1, pageSize: 20 });
+  const { deleteEmployee } = useEmployeeMutations();
+  // Both hooks used appropriately
+};
+```
+
+### Centralized Cache Management
+
+Cache invalidation should be handled by centralized cache modules in `lib/cache/`, organized by feature.
+
+```javascript
+// lib/cache/employees.ts - Centralized employee cache management
+import { mutate as globalMutate } from "swr";
+import type { SWRKey } from "./types";
+import { isListKey, logCacheOperation } from "./utils";
+
+const EMPLOYEES_LIST_PREFIX = "employees";
+const EMPLOYEE_DETAIL_PREFIX = "employee-";
+
+/**
+ * Invalidate only employee list caches (not detail endpoints)
+ * Use after create/delete operations or bulk updates
+ */
+export function invalidateEmployeeLists() {
+  logCacheOperation("Employees", "Invalidating employee lists only");
+
+  globalMutate((key: SWRKey) => {
+    if (isListKey(key, EMPLOYEES_LIST_PREFIX)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * Invalidate a specific employee detail cache
+ * Use after updating a single employee
+ */
+export function invalidateEmployee(employeeId: string) {
+  logCacheOperation("Employees", "Invalidating employee cache", { employeeId });
+
+  // Invalidate detail cache
+  globalMutate(`${EMPLOYEE_DETAIL_PREFIX}${employeeId}`);
+
+  // Also invalidate lists since the employee might appear there
+  invalidateEmployeeLists();
+}
+
+// Export as cohesive module
+export const employeesCache = {
+  invalidateEmployeeLists,
+  invalidateEmployee,
+  invalidateEmployees,
+  invalidateAllEmployees,
+  updateEmployeeCache,
+};
+
+// Usage in mutations:
+import { employeesCache } from "@/lib/cache";
+
+const updateEmployee = async (id, data) => {
+  await supabase.from("employees").update(data).eq("id", id);
+  employeesCache.invalidateEmployee(id); // Centralized, type-safe
+};
+```
+
+**File Structure for Cache Modules:**
+
+```
+lib/
+├── cache/
+│   ├── index.ts           # Export all cache modules
+│   ├── types.ts           # Shared types for cache keys
+│   ├── utils.ts           # Shared utilities (isListKey, logCacheOperation)
+│   ├── employees.ts       # Employee cache management
+│   ├── payroll.ts        # Payroll cache management
+│   └── departments.ts    # Department cache management
+```
+
+### Single Resource Hook
+
+```javascript
+// hooks/useEmployees.ts
+export function useEmployee(id: string | null) {
+  const fetchEmployee = async (): Promise<Employee | null> => {
+    if (!id) return null;
+
+    const { data, error } = await supabase
+      .from("employee_dto_v1")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return (data as Employee) || null;
+  };
+
+  const { data: employee, isLoading, error } = useSWR<Employee | null>(
+    id ? `employee-${id}` : null,
+    fetchEmployee
+  );
+
+  return {
+    employee: employee || null,
+    isLoading,
+    error,
+  };
+}
+```
 
 ### SWR Configuration
 
@@ -57,13 +280,6 @@ const swrConfig = {
     console.error("SWR Error:", error);
     // Global error handling
   },
-  fetcher: async (url) => {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
-    return response.json();
-  },
 };
 
 export const SWRProvider = ({ children }) => {
@@ -71,276 +287,19 @@ export const SWRProvider = ({ children }) => {
 };
 ```
 
-### Custom Data Fetching Hooks
-
-```javascript
-// hooks/useEmployees.js
-import useSWR from "swr";
-import api from "@/lib/axios";
-import { mutate } from "swr";
-
-const fetcher = (url) => api.get(url).then((res) => res.data);
-
-export const useEmployees = () => {
-  const { data, error, isLoading } = useSWR("/api/employees", fetcher);
-
-  const addEmployee = async (employeeData) => {
-    try {
-      await api.post("/api/employees", employeeData);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error adding employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const updateEmployee = async (id, data) => {
-    try {
-      await api.put(`/api/employees/${id}`, data);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error updating employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const deleteEmployee = async (id) => {
-    try {
-      await api.delete(`/api/employees/${id}`);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error deleting employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  return {
-    employees: data,
-    isLoading,
-    error,
-    addEmployee,
-    updateEmployee,
-    deleteEmployee,
-  };
-};
-```
-
-### Payroll Data Hook
-
-```javascript
-// hooks/usePayroll.js
-import useSWR from "swr";
-import api from "@/lib/axios";
-import { mutate } from "swr";
-
-export const usePayroll = (payPeriod) => {
-  const key = payPeriod ? `/api/payroll/${payPeriod}` : null;
-  const { data, error, isLoading } = useSWR(key, fetcher);
-
-  const generatePayroll = async (payPeriodData) => {
-    try {
-      await api.post("/api/payroll/generate", payPeriodData);
-      mutate("/api/payroll"); // Invalidate payroll list
-      mutate(key); // Invalidate specific payroll
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
-  const approvePayroll = async (payrollId) => {
-    try {
-      await api.put(`/api/payroll/${payrollId}/approve`);
-      mutate(key); // Re-fetch specific payroll
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
-  return {
-    payroll: data,
-    isLoading,
-    error,
-    generatePayroll,
-    approvePayroll,
-  };
-};
-```
-
-### Axios Configuration with JWT
-
-```javascript
-// lib/axios.js
-import axios from "axios";
-import { getStoredToken, validateJWT, clearStoredToken } from "./auth";
-
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Request interceptor for JWT
-api.interceptors.request.use(
-  (config) => {
-    const token = getStoredToken();
-    if (token && validateJWT(token)) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      clearStoredToken();
-      window.location.href = "/login";
-      return Promise.reject(error);
-    }
-
-    if (error.response?.status >= 500) {
-      // Server error - show generic message
-      console.error("Server Error:", error.response.data);
-    }
-
-    return Promise.reject(error);
-  }
-);
-
-export default api;
-```
-
 ### Error Handling with Toast
 
 ```javascript
-// hooks/useApiError.js
+// hooks/useToast.js (example)
 import { toast } from "react-toastify";
 
-export const useApiError = () => {
-  const handleError = (error, customMessage) => {
-    let message = customMessage || "An error occurred";
-
-    if (error.response) {
-      // Server responded with error status
-      const { status, data } = error.response;
-
-      switch (status) {
-        case 400:
-          message = data.message || "Invalid request";
-          break;
-        case 401:
-          message = "Unauthorized access";
-          break;
-        case 403:
-          message = "Access forbidden";
-          break;
-        case 404:
-          message = "Resource not found";
-          break;
-        case 422:
-          message = data.message || "Validation error";
-          break;
-        case 500:
-          message = "Server error occurred";
-          break;
-        default:
-          message = data.message || "An error occurred";
-      }
-    } else if (error.request) {
-      // Network error
-      message = "Network error - please check your connection";
-    }
-
-    toast.error(message);
+export const useToast = () => {
+  return {
+    success: (message) => toast.success(message),
+    error: (message) => toast.error(message),
+    info: (message) => toast.info(message),
+    warning: (message) => toast.warning(message),
   };
-
-  const handleSuccess = (message) => {
-    toast.success(message);
-  };
-
-  return { handleError, handleSuccess };
-};
-```
-
-### Cache Invalidation Patterns
-
-```javascript
-// utils/cache-invalidation.js
-import { mutate } from "swr";
-
-// Invalidate specific cache
-export const invalidateCache = (key) => {
-  mutate(key);
-};
-
-// Invalidate multiple related caches
-export const invalidateEmployeeCaches = () => {
-  mutate("/api/employees");
-  mutate("/api/employees/stats");
-  mutate("/api/departments"); // If departments depend on employees
-};
-
-// Invalidate all caches (use sparingly)
-export const invalidateAllCaches = () => {
-  mutate(() => true);
-};
-
-// Selective invalidation based on data
-export const invalidatePayrollCaches = (payPeriod) => {
-  mutate("/api/payroll");
-  mutate(`/api/payroll/${payPeriod}`);
-  mutate("/api/payroll/summary");
-};
-```
-
-### Loading States Management
-
-```javascript
-// hooks/useLoadingStates.js
-import { useState } from "react";
-
-export const useLoadingStates = () => {
-  const [loadingStates, setLoadingStates] = useState({});
-
-  const setLoading = (key, isLoading) => {
-    setLoadingStates((prev) => ({
-      ...prev,
-      [key]: isLoading,
-    }));
-  };
-
-  const isLoading = (key) => {
-    return loadingStates[key] || false;
-  };
-
-  const withLoading = async (key, asyncFn) => {
-    setLoading(key, true);
-    try {
-      const result = await asyncFn();
-      return result;
-    } finally {
-      setLoading(key, false);
-    }
-  };
-
-  return { setLoading, isLoading, withLoading };
 };
 ```
 
@@ -349,7 +308,33 @@ export const useLoadingStates = () => {
 ### ❌ Don't Do This
 
 ```javascript
-// Don't use optimistic updates for payroll data
+// ❌ DON'T: Mix data fetching and mutations in the same hook
+const BadUseEmployees = () => {
+  const { data, error, isLoading } = useSWR("/api/employees", fetcher);
+
+  // This triggers a fetch even when you only need deleteEmployee!
+  const deleteEmployee = async (id) => {
+    await api.delete(`/api/employees/${id}`);
+    mutate("/api/employees");
+  };
+
+  return { employees: data, isLoading, error, deleteEmployee };
+};
+
+// Usage in detail page - causes unnecessary list fetch:
+const EmployeeDetailPage = () => {
+  const { employee } = useEmployee(id);
+  const { deleteEmployee } = useEmployees(); // ❌ Fetches list unnecessarily!
+};
+
+// ❌ DON'T: Invalidate cache directly in mutations
+const BadAddEmployee = async (employeeData) => {
+  await api.post("/api/employees", employeeData);
+  mutate("/api/employees"); // ❌ Direct mutate in mutation hook
+  // Should use centralized cache module instead
+};
+
+// ❌ DON'T: Use optimistic updates for payroll data
 const BadUpdateEmployee = async (id, data) => {
   // Optimistically update UI
   setEmployees((prev) =>
@@ -364,18 +349,12 @@ const BadUpdateEmployee = async (id, data) => {
   }
 };
 
-// Don't ignore cache invalidation
-const BadAddEmployee = async (employeeData) => {
-  await api.post("/api/employees", employeeData);
-  // Missing mutate() - cache becomes stale
-};
-
-// Don't mix fetch and axios
+// ❌ DON'T: Mix fetch and supabase/axios
 const BadDataFetching = () => {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    fetch("/api/employees") // Inconsistent with axios usage
+    fetch("/api/employees") // Inconsistent with supabase usage
       .then((res) => res.json())
       .then(setData);
   }, []);
@@ -385,31 +364,65 @@ const BadDataFetching = () => {
 ### ✅ Do This Instead
 
 ```javascript
-// Use pessimistic updates
+// ✅ GOOD: Separate data fetching from mutations
+// hooks/useEmployees.ts - Data fetching ONLY
+export function useEmployees(params = {}) {
+  const { data, isLoading, error, mutate } = useSWR(employeesKey(params), () =>
+    fetchEmployeesWithParams(params)
+  );
+
+  return {
+    employees: data?.data || [],
+    isLoading,
+    error,
+    mutate,
+    // NO mutations here
+  };
+}
+
+// hooks/useEmployeeMutations.ts - Mutations ONLY
+export function useEmployeeMutations() {
+  const createEmployee = async (data) => {
+    await supabase.from("employees").insert(data);
+    employeesCache.invalidateEmployeeLists(); // ✅ Centralized cache
+  };
+
+  return { createEmployee, updateEmployee, deleteEmployee };
+}
+
+// ✅ GOOD: Use appropriate hooks in components
+const EmployeeDetailPage = () => {
+  const { employee } = useEmployee(id); // ✅ Fetch single employee
+  const { deleteEmployee } = useEmployeeMutations(); // ✅ Only mutations, no fetch
+};
+
+// ✅ GOOD: Use pessimistic updates
 const GoodUpdateEmployee = async (id, data) => {
   try {
-    await api.put(`/api/employees/${id}`, data);
-    mutate("/api/employees"); // Re-fetch after success
+    await supabase.from("employees").update(data).eq("id", id);
+    employeesCache.invalidateEmployee(id); // ✅ Centralized cache invalidation
     toast.success("Employee updated successfully");
   } catch (error) {
     toast.error("Failed to update employee");
   }
 };
 
-// Always invalidate cache
+// ✅ GOOD: Always use centralized cache modules
+import { employeesCache } from "@/lib/cache";
+
 const GoodAddEmployee = async (employeeData) => {
   try {
-    await api.post("/api/employees", employeeData);
-    mutate("/api/employees"); // Keep cache fresh
+    await supabase.from("employees").insert(employeeData);
+    employeesCache.invalidateEmployeeLists(); // ✅ Centralized, type-safe
     toast.success("Employee added successfully");
   } catch (error) {
     toast.error("Failed to add employee");
   }
 };
 
-// Use consistent data fetching
+// ✅ GOOD: Use consistent data fetching with SWR
 const GoodDataFetching = () => {
-  const { employees, isLoading, error } = useEmployees();
+  const { employees, isLoading, error } = useEmployees({ page: 1 });
 
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorMessage error={error} />;
@@ -425,7 +438,7 @@ const GoodDataFetching = () => {
 ```json
 {
   "swr": "^2.0.0",
-  "axios": "^1.0.0",
+  "@supabase/supabase-js": "^2.0.0",
   "react-toastify": "^9.0.0"
 }
 ```
@@ -435,472 +448,53 @@ const GoodDataFetching = () => {
 ```
 lib/
 ├── swr-config.js         # SWR global configuration
-├── axios.js              # Axios instance with interceptors
+├── supabase.js           # Supabase client configuration
+├── cache/                # Centralized cache management modules
+│   ├── index.ts         # Export all cache modules
+│   ├── types.ts         # Shared cache types
+│   ├── utils.ts         # Shared cache utilities
+│   ├── employees.ts     # Employee cache management
+│   ├── payroll.ts       # Payroll cache management
+│   └── departments.ts   # Department cache management
 hooks/
-├── useEmployees.js       # Employee data hook
-├── usePayroll.js         # Payroll data hook
-├── useApiError.js        # Error handling hook
-├── useLoadingStates.js   # Loading states hook
-utils/
-├── cache-invalidation.js # Cache management utilities
+├── useEmployees.ts       # Employee data fetching ONLY
+├── useEmployeeMutations.ts # Employee mutations ONLY
+├── useEmployee.ts       # Single employee fetching
+├── usePayroll.ts         # Payroll data fetching ONLY
+├── usePayrollMutations.ts # Payroll mutations ONLY
+├── useToast.js          # Toast notification hook
+└── useLoadingStates.js   # Loading states hook (if needed)
 ```
 
-### SWR Configuration Best Practices
+### Data Fetching Best Practices
 
-1. **Global Config**: Set revalidation policies globally
-2. **Error Handling**: Implement consistent error handling
-3. **Loading States**: Use SWR's built-in loading states
-4. **Cache Keys**: Use consistent, descriptive cache keys
-5. **Deduplication**: Leverage SWR's automatic deduplication
-6. **Revalidation**: Configure appropriate revalidation strategies
+1. **Separate Concerns**: Always separate data fetching hooks from mutation hooks
 
-# Data Fetching Rules - Bluespice 2.0
+   - `useEmployees()` → Data fetching ONLY
+   - `useEmployeeMutations()` → Mutations ONLY
+   - This prevents unnecessary fetches when you only need mutations
 
-## Overview
+2. **Centralized Cache**: Use centralized cache modules in `lib/cache/`
 
-SWR for GET requests and caching, Axios for mutations with JWT auto-attach, pessimistic updates, and centralized error handling for the Bluespice payroll application.
+   - One module per feature (employees.ts, payroll.ts, etc.)
+   - Expose cohesive API (employeesCache.invalidateEmployee())
+   - Don't use `mutate()` directly in components/mutations
 
-## Core Principles
+3. **Global SWR Config**: Set revalidation policies globally
+4. **Error Handling**: Implement consistent error handling
+5. **Loading States**: Use SWR's built-in loading states
+6. **Cache Keys**: Use consistent, descriptive cache keys with key generators
+7. **Deduplication**: Leverage SWR's automatic deduplication
+8. **Revalidation**: Configure appropriate revalidation strategies
 
-### 1. SWR for GET Operations
+### Hook Naming Convention
 
-- Use SWR exclusively for data fetching and caching
-- Configure SWR globally for consistent behavior
-- Implement automatic revalidation strategies
-- Handle loading and error states uniformly
+- **Data Fetching Hooks**: `useEmployees`, `usePayroll`, `useEmployee(id)`
 
-### 2. Axios for Mutations
+  - Return: `{ data, isLoading, error, mutate }`
+  - NO mutations included
 
-- Use Axios for all POST, PUT, DELETE operations
-- Auto-attach JWT tokens via interceptors
-- Implement pessimistic updates (no optimistic)
-- Invalidate SWR cache after successful mutations
-
-### 3. Cache Management
-
-- Use `mutate()` to invalidate cache after mutations
-- Implement selective cache invalidation
-- Avoid optimistic updates for payroll data
-- Handle cache consistency across components
-
-### 4. Error Handling
-
-- Centralized error handling with toast notifications
-- Consistent error response format
-- Graceful degradation for network failures
-- User-friendly error messages
-
-## Patterns & Examples
-
-### SWR Configuration
-
-```javascript
-// lib/swr-config.js
-import { SWRConfig } from "swr";
-
-const swrConfig = {
-  revalidateOnFocus: false,
-  revalidateOnReconnect: false,
-  dedupingInterval: 2000,
-  errorRetryCount: 3,
-  errorRetryInterval: 5000,
-  onError: (error) => {
-    console.error("SWR Error:", error);
-    // Global error handling
-  },
-  fetcher: async (url) => {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
-    return response.json();
-  },
-};
-
-export const SWRProvider = ({ children }) => {
-  return <SWRConfig value={swrConfig}>{children}</SWRConfig>;
-};
-```
-
-### Custom Data Fetching Hooks
-
-```javascript
-// hooks/useEmployees.js
-import useSWR from "swr";
-import api from "@/lib/axios";
-import { mutate } from "swr";
-
-const fetcher = (url) => api.get(url).then((res) => res.data);
-
-export const useEmployees = () => {
-  const { data, error, isLoading } = useSWR("/api/employees", fetcher);
-
-  const addEmployee = async (employeeData) => {
-    try {
-      await api.post("/api/employees", employeeData);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error adding employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const updateEmployee = async (id, data) => {
-    try {
-      await api.put(`/api/employees/${id}`, data);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error updating employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const deleteEmployee = async (id) => {
-    try {
-      await api.delete(`/api/employees/${id}`);
-      mutate("/api/employees"); // Re-fetch after success
-      return { success: true };
-    } catch (error) {
-      console.error("Error deleting employee:", error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  return {
-    employees: data,
-    isLoading,
-    error,
-    addEmployee,
-    updateEmployee,
-    deleteEmployee,
-  };
-};
-```
-
-### Payroll Data Hook
-
-```javascript
-// hooks/usePayroll.js
-import useSWR from "swr";
-import api from "@/lib/axios";
-import { mutate } from "swr";
-
-export const usePayroll = (payPeriod) => {
-  const key = payPeriod ? `/api/payroll/${payPeriod}` : null;
-  const { data, error, isLoading } = useSWR(key, fetcher);
-
-  const generatePayroll = async (payPeriodData) => {
-    try {
-      await api.post("/api/payroll/generate", payPeriodData);
-      mutate("/api/payroll"); // Invalidate payroll list
-      mutate(key); // Invalidate specific payroll
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
-  const approvePayroll = async (payrollId) => {
-    try {
-      await api.put(`/api/payroll/${payrollId}/approve`);
-      mutate(key); // Re-fetch specific payroll
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
-  return {
-    payroll: data,
-    isLoading,
-    error,
-    generatePayroll,
-    approvePayroll,
-  };
-};
-```
-
-### Axios Configuration with JWT
-
-```javascript
-// lib/axios.js
-import axios from "axios";
-import { getStoredToken, validateJWT, clearStoredToken } from "./auth";
-
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Request interceptor for JWT
-api.interceptors.request.use(
-  (config) => {
-    const token = getStoredToken();
-    if (token && validateJWT(token)) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      clearStoredToken();
-      window.location.href = "/login";
-      return Promise.reject(error);
-    }
-
-    if (error.response?.status >= 500) {
-      // Server error - show generic message
-      console.error("Server Error:", error.response.data);
-    }
-
-    return Promise.reject(error);
-  }
-);
-
-export default api;
-```
-
-### Error Handling with Toast
-
-```javascript
-// hooks/useApiError.js
-import { toast } from "react-toastify";
-
-export const useApiError = () => {
-  const handleError = (error, customMessage) => {
-    let message = customMessage || "An error occurred";
-
-    if (error.response) {
-      // Server responded with error status
-      const { status, data } = error.response;
-
-      switch (status) {
-        case 400:
-          message = data.message || "Invalid request";
-          break;
-        case 401:
-          message = "Unauthorized access";
-          break;
-        case 403:
-          message = "Access forbidden";
-          break;
-        case 404:
-          message = "Resource not found";
-          break;
-        case 422:
-          message = data.message || "Validation error";
-          break;
-        case 500:
-          message = "Server error occurred";
-          break;
-        default:
-          message = data.message || "An error occurred";
-      }
-    } else if (error.request) {
-      // Network error
-      message = "Network error - please check your connection";
-    }
-
-    toast.error(message);
-  };
-
-  const handleSuccess = (message) => {
-    toast.success(message);
-  };
-
-  return { handleError, handleSuccess };
-};
-```
-
-### Cache Invalidation Patterns
-
-```javascript
-// utils/cache-invalidation.js
-import { mutate } from "swr";
-
-// Invalidate specific cache
-export const invalidateCache = (key) => {
-  mutate(key);
-};
-
-// Invalidate multiple related caches
-export const invalidateEmployeeCaches = () => {
-  mutate("/api/employees");
-  mutate("/api/employees/stats");
-  mutate("/api/departments"); // If departments depend on employees
-};
-
-// Invalidate all caches (use sparingly)
-export const invalidateAllCaches = () => {
-  mutate(() => true);
-};
-
-// Selective invalidation based on data
-export const invalidatePayrollCaches = (payPeriod) => {
-  mutate("/api/payroll");
-  mutate(`/api/payroll/${payPeriod}`);
-  mutate("/api/payroll/summary");
-};
-```
-
-### Loading States Management
-
-```javascript
-// hooks/useLoadingStates.js
-import { useState } from "react";
-
-export const useLoadingStates = () => {
-  const [loadingStates, setLoadingStates] = useState({});
-
-  const setLoading = (key, isLoading) => {
-    setLoadingStates((prev) => ({
-      ...prev,
-      [key]: isLoading,
-    }));
-  };
-
-  const isLoading = (key) => {
-    return loadingStates[key] || false;
-  };
-
-  const withLoading = async (key, asyncFn) => {
-    setLoading(key, true);
-    try {
-      const result = await asyncFn();
-      return result;
-    } finally {
-      setLoading(key, false);
-    }
-  };
-
-  return { setLoading, isLoading, withLoading };
-};
-```
-
-## Anti-Patterns
-
-### ❌ Don't Do This
-
-```javascript
-// Don't use optimistic updates for payroll data
-const BadUpdateEmployee = async (id, data) => {
-  // Optimistically update UI
-  setEmployees((prev) =>
-    prev.map((emp) => (emp.id === id ? { ...emp, ...data } : emp))
-  );
-
-  try {
-    await api.put(`/api/employees/${id}`, data);
-  } catch (error) {
-    // Rollback on error - complex and error-prone
-    setEmployees(originalEmployees);
-  }
-};
-
-// Don't ignore cache invalidation
-const BadAddEmployee = async (employeeData) => {
-  await api.post("/api/employees", employeeData);
-  // Missing mutate() - cache becomes stale
-};
-
-// Don't mix fetch and axios
-const BadDataFetching = () => {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    fetch("/api/employees") // Inconsistent with axios usage
-      .then((res) => res.json())
-      .then(setData);
-  }, []);
-};
-```
-
-### ✅ Do This Instead
-
-```javascript
-// Use pessimistic updates
-const GoodUpdateEmployee = async (id, data) => {
-  try {
-    await api.put(`/api/employees/${id}`, data);
-    mutate("/api/employees"); // Re-fetch after success
-    toast.success("Employee updated successfully");
-  } catch (error) {
-    toast.error("Failed to update employee");
-  }
-};
-
-// Always invalidate cache
-const GoodAddEmployee = async (employeeData) => {
-  try {
-    await api.post("/api/employees", employeeData);
-    mutate("/api/employees"); // Keep cache fresh
-    toast.success("Employee added successfully");
-  } catch (error) {
-    toast.error("Failed to add employee");
-  }
-};
-
-// Use consistent data fetching
-const GoodDataFetching = () => {
-  const { employees, isLoading, error } = useEmployees();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage error={error} />;
-
-  return <EmployeeList employees={employees} />;
-};
-```
-
-## Related Files/Dependencies
-
-### Required Packages
-
-```json
-{
-  "swr": "^2.0.0",
-  "axios": "^1.0.0",
-  "react-toastify": "^9.0.0"
-}
-```
-
-### File Structure
-
-```
-lib/
-├── swr-config.js         # SWR global configuration
-├── axios.js              # Axios instance with interceptors
-hooks/
-├── useEmployees.js       # Employee data hook
-├── usePayroll.js         # Payroll data hook
-├── useApiError.js        # Error handling hook
-├── useLoadingStates.js   # Loading states hook
-utils/
-├── cache-invalidation.js # Cache management utilities
-```
-
-### SWR Configuration Best Practices
-
-1. **Global Config**: Set revalidation policies globally
-2. **Error Handling**: Implement consistent error handling
-3. **Loading States**: Use SWR's built-in loading states
-4. **Cache Keys**: Use consistent, descriptive cache keys
-5. **Deduplication**: Leverage SWR's automatic deduplication
-6. **Revalidation**: Configure appropriate revalidation strategies
+- **Mutation Hooks**: `useEmployeeMutations`, `usePayrollMutations`
+  - Return: `{ createX, updateX, deleteX }`
+  - NO data fetching (no useSWR inside)
+  - Use centralized cache modules for invalidation
