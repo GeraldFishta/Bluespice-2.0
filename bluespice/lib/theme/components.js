@@ -1,5 +1,5 @@
 // lib/theme/components.js
-const components = {
+const components = (theme) => ({
   MuiButton: {
     styleOverrides: {
       root: { minHeight: "44px", textTransform: "none", borderRadius: "8px", fontWeight: 500 },
@@ -7,7 +7,14 @@ const components = {
     },
   },
   MuiTableCell: {
-    styleOverrides: { root: { padding: "12px 16px", borderBottom: "1px solid #e0e0e0" }, head: { fontWeight: 600, backgroundColor: "#f5f5f5" } },
+    styleOverrides: {
+      root: { padding: "12px 16px", borderBottom: "1px solid #e0e0e0" },
+      head: {
+        fontWeight: 600,
+        backgroundColor: theme.palette.mode === "dark" ? "#c5c5c5" : "#f5f5f5",
+        color: theme.palette.mode === "dark" ? "#111827" : undefined,
+      },
+    },
   },
   MuiCard: { styleOverrides: { root: { borderRadius: "12px", boxShadow: "0px 2px 8px rgba(0,0,0,0.1)" } } },
   MuiTextField: { styleOverrides: { root: { "& .MuiOutlinedInput-root": { borderRadius: "8px" } } } },
@@ -63,7 +70,7 @@ const components = {
       root: { borderRadius: 8, fontWeight: 500 },
     },
   },
-}
+})
 
 export default components
 

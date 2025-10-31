@@ -9,16 +9,21 @@ import breakpoints from "./breakpoints"
 import shadows from "./shadows"
 import { useThemeStore } from "@/stores/themeStore"
 
-export const createAppTheme = mode =>
-  createTheme({
-    palette: mode === "dark" ? darkPalette : lightPalette,
+export const createAppTheme = mode => {
+  const palette = mode === "dark" ? darkPalette : lightPalette
+  const baseTheme = createTheme({
+    palette,
     typography,
-    components,
     breakpoints,
     shadows,
     shape: { borderRadius: 8 },
     spacing: 8,
   })
+  
+  return createTheme(baseTheme, {
+    components: components(baseTheme),
+  })
+}
 
 export const lightTheme = createAppTheme("light")
 export const darkTheme = createAppTheme("dark")
