@@ -83,6 +83,15 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
 
       if (isEditMode && employee) {
         // Update mode: update both profile and employee
+        // Get profile_id from profile object (since view doesn't include profile_id directly)
+        const profileId = employee.profile?.id;
+
+        if (!profileId) {
+          throw new Error(
+            "Profile ID not found. Cannot update employee profile."
+          );
+        }
+
         // Update profile
         const { error: profileError } = await supabase
           .from("profiles")
@@ -97,11 +106,12 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
               ? new Date(sanitizedData.hireDate).toISOString()
               : null,
           })
-          .eq("id", employee.profile_id);
+          .eq("id", profileId);
 
         if (profileError) throw profileError;
 
         // Update employee
+        // Note: toast notifications are handled by useEmployeeMutations hook
         const result = await updateEmployee(employee.id, {
           employee_id: sanitizedData.employeeId,
           salary: sanitizedData.salary,
@@ -113,7 +123,8 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         if (!result.success)
           throw new Error(result.error || "Failed to update employee");
 
-        toast.success("Employee updated successfully!");
+        // Navigation after successful update
+        // Toast already shown by mutation hook
         router.push("/employees");
         onSuccess?.();
       } else {
@@ -153,6 +164,7 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
             throw new Error(result.error || "Failed to create employee");
           }
 
+          // Show success toast for create (API route doesn't use mutation hook)
           toast.success(
             "Employee created successfully! They will receive an email to set their password."
           );

@@ -303,6 +303,45 @@ export const useToast = () => {
 };
 ```
 
+### Toast Notification Pattern
+
+**CRITICAL**: Mutation hooks handle toast notifications for CRUD operations. Components should NOT show duplicate toasts.
+
+**Pattern:**
+- **Mutation Hooks** (`useEmployeeMutations`, `usePayrollMutations`) → Show success/error toasts for create/update/delete operations
+- **Components** → Only show toasts for:
+  - Form validation errors (via `useFormErrors`)
+  - Special operations that don't go through mutation hooks (e.g., API routes)
+  - Component-specific messages that aren't handled by mutations
+
+```javascript
+// ✅ GOOD: Mutation hook handles toast
+// hooks/useEmployeeMutations.ts
+const updateEmployee = async (id, data) => {
+  try {
+    await supabase.from("employees").update(data).eq("id", id);
+    employeesCache.invalidateEmployee(id);
+    toast.success("Employee updated successfully!"); // ✅ Toast here
+    return { success: true };
+  } catch (error) {
+    toast.error(error.message || "Failed to update employee");
+    return { success: false, error: error.message };
+  }
+};
+
+// ✅ GOOD: Component doesn't duplicate toast
+// components/employees/EmployeeForm.tsx
+const result = await updateEmployee(employee.id, data);
+if (!result.success) throw new Error(result.error);
+// No toast here - mutation hook already showed it ✅
+router.push("/employees");
+
+// ❌ BAD: Component duplicates toast
+const result = await updateEmployee(employee.id, data);
+toast.success("Employee updated successfully!"); // ❌ Duplicate!
+router.push("/employees");
+```
+
 ## Anti-Patterns
 
 ### ❌ Don't Do This
@@ -358,6 +397,14 @@ const BadDataFetching = () => {
       .then((res) => res.json())
       .then(setData);
   }, []);
+};
+
+// ❌ DON'T: Show duplicate toast notifications
+const BadUpdateEmployee = async () => {
+  const result = await updateEmployee(id, data);
+  if (result.success) {
+    toast.success("Employee updated!"); // ❌ Duplicate! Hook already showed it
+  }
 };
 ```
 
@@ -428,6 +475,17 @@ const GoodDataFetching = () => {
   if (error) return <ErrorMessage error={error} />;
 
   return <EmployeeList employees={employees} />;
+};
+
+// ✅ GOOD: Let mutation hook handle toast, component handles navigation
+const GoodUpdateEmployee = async () => {
+  const result = await updateEmployee(id, data);
+  if (!result.success) {
+    // Handle error if needed (hook already showed error toast)
+    return;
+  }
+  // No success toast here - hook already showed it ✅
+  router.push("/employees");
 };
 ```
 

@@ -21,6 +21,7 @@ export interface Employee {
     updated_at: string;
     // Joined with profiles
     profile?: {
+        id: string; // Profile ID (included in view JSONB)
         first_name: string;
         last_name: string;
         email: string;
