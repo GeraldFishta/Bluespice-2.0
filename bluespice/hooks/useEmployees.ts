@@ -2,8 +2,8 @@
 "use client";
 import useSWR from "swr";
 import { supabase } from "@/lib/supabase";
-import { mutate } from "swr";
 import { useToast } from "./useToast";
+import { employeesCache } from "@/lib/cache";
 
 export interface Employee {
     id: string;
@@ -126,7 +126,7 @@ export function useEmployees(params: EmployeeFilters = {}) {
             if (error) throw error;
 
             // Invalidate all employees caches
-            mutate((k) => Array.isArray(k) && k[0] === "employees");
+            employeesCache.invalidateEmployeeLists();
             toast.success("Employee created successfully!");
             return { success: true, data };
         } catch (error: unknown) {
@@ -147,8 +147,8 @@ export function useEmployees(params: EmployeeFilters = {}) {
 
             if (error) throw error;
 
-            // Invalidate all employees caches
-            mutate((k) => Array.isArray(k) && k[0] === "employees");
+            // Invalidate employee cache (both detail and lists)
+            employeesCache.invalidateEmployee(id);
             toast.success("Employee updated successfully!");
             return { success: true, data };
         } catch (error: unknown) {
@@ -165,7 +165,7 @@ export function useEmployees(params: EmployeeFilters = {}) {
             if (error) throw error;
 
             // Invalidate all employees caches
-            mutate((k) => Array.isArray(k) && k[0] === "employees");
+            employeesCache.invalidateEmployeeLists();
             toast.success("Employee deleted successfully!");
             return { success: true };
         } catch (error: unknown) {

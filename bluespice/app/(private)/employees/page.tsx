@@ -18,8 +18,20 @@ import {
   MenuItem,
   IconButton,
   Chip,
+  TableSortLabel,
+  Pagination,
+  Select,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
-import { Add, Edit, Delete, Visibility } from "@mui/icons-material";
+import {
+  Add,
+  Edit,
+  Delete,
+  Visibility,
+  ArrowUpward,
+  ArrowDownward,
+} from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
 import { PERMISSIONS } from "@/lib/permissions";
 import { SearchBar } from "@/components/search";
@@ -32,16 +44,31 @@ import {
 import { formatCurrency } from "@/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 
+type SortField = "created_at" | "employee_id" | "salary";
+type SortDirection = "asc" | "desc";
+
 export default function EmployeesPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive" | "terminated"
   >("all");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState<
+    "all" | "full-time" | "part-time" | "contract"
+  >("all");
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const { employees, isLoading, error, deleteEmployee } = useEmployees({
+  const { employees, total, isLoading, error, deleteEmployee } = useEmployees({
     search: searchQuery,
     status: statusFilter,
+    employmentType: employmentTypeFilter,
+    sort: sortField,
+    dir: sortDirection,
+    page,
+    pageSize,
   });
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
   const { hasAccess: canCreate } = usePermissions(PERMISSIONS.EMPLOYEES_CREATE);
@@ -81,6 +108,45 @@ export default function EmployeesPage() {
     setEmployeeToDelete(null);
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field with default direction
+      setSortField(field);
+      setSortDirection("desc");
+    }
+    setPage(1); // Reset to first page on sort change
+  };
+
+  const handlePageChange = (
+    _event: React.ChangeEvent<unknown>,
+    value: number
+  ) => {
+    setPage(value);
+  };
+
+  const handlePageSizeChange = (
+    event: React.ChangeEvent<{ value: unknown }>
+  ) => {
+    setPageSize(event.target.value as number);
+    setPage(1); // Reset to first page on page size change
+  };
+
+  // Calculate total pages
+  const totalPages = total ? Math.ceil(total / pageSize) : 0;
+
+  // Sortable column configuration
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) return null;
+    return sortDirection === "asc" ? (
+      <ArrowUpward fontSize="small" />
+    ) : (
+      <ArrowDownward fontSize="small" />
+    );
+  };
+
   return (
     <Box>
       <Stack
@@ -114,17 +180,35 @@ export default function EmployeesPage() {
             select
             label="Status"
             value={statusFilter}
-            onChange={(e) =>
+            onChange={(e) => {
               setStatusFilter(
                 e.target.value as "all" | "active" | "inactive" | "terminated"
-              )
-            }
+              );
+              setPage(1); // Reset to first page on filter change
+            }}
             sx={{ minWidth: 150 }}
           >
             <MenuItem value="all">All</MenuItem>
             <MenuItem value="active">Active</MenuItem>
             <MenuItem value="inactive">Inactive</MenuItem>
             <MenuItem value="terminated">Terminated</MenuItem>
+          </TextField>
+          <TextField
+            select
+            label="Employment Type"
+            value={employmentTypeFilter}
+            onChange={(e) => {
+              setEmploymentTypeFilter(
+                e.target.value as "all" | "full-time" | "part-time" | "contract"
+              );
+              setPage(1); // Reset to first page on filter change
+            }}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="full-time">Full-time</MenuItem>
+            <MenuItem value="part-time">Part-time</MenuItem>
+            <MenuItem value="contract">Contract</MenuItem>
           </TextField>
         </Stack>
       </Paper>
@@ -141,13 +225,33 @@ export default function EmployeesPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Employee ID</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortField === "employee_id"}
+                  direction={
+                    sortField === "employee_id" ? sortDirection : "asc"
+                  }
+                  onClick={() => handleSort("employee_id")}
+                  IconComponent={() => getSortIcon("employee_id") || <></>}
+                >
+                  Employee ID
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Department</TableCell>
               <TableCell>Position</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Salary</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortField === "salary"}
+                  direction={sortField === "salary" ? sortDirection : "asc"}
+                  onClick={() => handleSort("salary")}
+                  IconComponent={() => getSortIcon("salary") || <></>}
+                >
+                  Salary
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Employment Type</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -243,6 +347,49 @@ export default function EmployeesPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Pagination */}
+      {total && total > 0 && (
+        <Paper sx={{ p: 2, mt: 2 }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            spacing={2}
+          >
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                Total: {total} employees
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel>Per Page</InputLabel>
+                <Select
+                  value={pageSize}
+                  label="Per Page"
+                  onChange={(e) =>
+                    handlePageSizeChange(
+                      e as React.ChangeEvent<{ value: unknown }>
+                    )
+                  }
+                >
+                  <MenuItem value={10}>10</MenuItem>
+                  <MenuItem value={20}>20</MenuItem>
+                  <MenuItem value={50}>50</MenuItem>
+                  <MenuItem value={100}>100</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={handlePageChange}
+              color="primary"
+              showFirstButton
+              showLastButton
+            />
+          </Stack>
+        </Paper>
+      )}
 
       <ConfirmDialog
         open={deleteDialogOpen}
