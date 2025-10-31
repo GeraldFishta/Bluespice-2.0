@@ -7,8 +7,6 @@
 import { mutate as globalMutate } from "swr";
 import type { SWRKey } from "./types";
 import { isListKey, logCacheOperation } from "./utils";
-import type { Employee } from "@/hooks/useEmployees";
-import type { MutatorCallback } from "swr";
 
 // Cache key patterns
 const EMPLOYEES_LIST_PREFIX = "employees";
@@ -113,30 +111,6 @@ export function invalidateAllEmployees(force = false): void {
     return false;
   });
 }
-/**
- * Update a specific employee cache optimistically
- * (Optional, only if you want optimistic updates)
- * @param employeeId - Employee ID
- * @param updates - Partial employee data
- */
-export function updateEmployeeCache(
-  employeeId: string,
-  updates: Partial<Employee>
-): void {
-  logCacheOperation("Employees", "Updating employee cache optimistically", {
-    employeeId,
-    updates,
-  });
-
-  const key = `${EMPLOYEE_DETAIL_PREFIX}${employeeId}`;
-  const updater: MutatorCallback<Employee> = (current: Employee | undefined) =>
-    current ? { ...current, ...updates } : undefined;
-
-  globalMutate<Employee>(key, updater, {
-    revalidate: false, // Don't revalidate immediately
-  });
-}
-
 
 // Export all methods as a cohesive module
 export const employeesCache = {
@@ -144,6 +118,5 @@ export const employeesCache = {
   invalidateEmployee,
   invalidateEmployees,
   invalidateAllEmployees,
-  updateEmployeeCache,
 };
 
