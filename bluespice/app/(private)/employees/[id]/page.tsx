@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Box,
@@ -11,7 +11,8 @@ import {
   Grid,
 } from "@mui/material";
 import { Edit, ArrowBack, Delete } from "@mui/icons-material";
-import { useEmployee, useEmployees } from "@/hooks/useEmployees";
+import { useEmployee } from "@/hooks/useEmployees";
+import { useEmployeeMutations } from "@/hooks/useEmployeeMutations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -28,12 +29,55 @@ export default function EmployeeDetailPage() {
   const router = useRouter();
   const employeeId = params.id as string;
   const { employee, isLoading, error } = useEmployee(employeeId);
-  const { deleteEmployee } = useEmployees();
+  const { deleteEmployee } = useEmployeeMutations();
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
   const { hasAccess: canUpdate } = usePermissions(PERMISSIONS.EMPLOYEES_UPDATE);
   const { hasAccess: canDelete } = usePermissions(PERMISSIONS.EMPLOYEES_DELETE);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Log for debugging hydration mismatch issues
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[EmployeeDetailPage] Component mounted on client", {
+        employeeId,
+        timestamp: new Date().toISOString(),
+        hasEmployee: !!employee,
+        isLoading,
+        hasError: !!error,
+      });
+    }
+  }, [employeeId, employee, isLoading, error]);
+
+  // Log hydration warnings if any
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      process.env.NODE_ENV === "development"
+    ) {
+      const originalError = console.error;
+      console.error = (...args) => {
+        if (
+          typeof args[0] === "string" &&
+          (args[0].includes("hydration") ||
+            args[0].includes("Hydration") ||
+            args[0].includes("mismatch"))
+        ) {
+          console.warn("[HYDRATION DEBUG]", {
+            message: args[0],
+            stack: new Error().stack,
+            timestamp: new Date().toISOString(),
+            url: window.location.href,
+          });
+        }
+        originalError.apply(console, args);
+      };
+
+      return () => {
+        console.error = originalError;
+      };
+    }
+  }, []);
 
   if (!canView) return <AccessDenied />;
   if (isLoading) return <LoadingSpinner message="Loading employee..." />;

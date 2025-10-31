@@ -8,3 +8,4 @@ export {
     useAllPermissions,
 } from "./usePermissions";
 export { useEmployees, useEmployee } from "./useEmployees";
+export { useEmployeeMutations } from "./useEmployeeMutations";

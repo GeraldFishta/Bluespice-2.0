@@ -33,6 +33,7 @@ import {
   ArrowDownward,
 } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
+import { useEmployeeMutations } from "@/hooks/useEmployeeMutations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { SearchBar } from "@/components/search";
 import {
@@ -61,7 +62,7 @@ export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { employees, total, isLoading, error, deleteEmployee } = useEmployees({
+  const { employees, total, isLoading, error } = useEmployees({
     search: searchQuery,
     status: statusFilter,
     employmentType: employmentTypeFilter,
@@ -70,6 +71,7 @@ export default function EmployeesPage() {
     page,
     pageSize,
   });
+  const { deleteEmployee } = useEmployeeMutations();
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
   const { hasAccess: canCreate } = usePermissions(PERMISSIONS.EMPLOYEES_CREATE);
   const { hasAccess: canUpdate } = usePermissions(PERMISSIONS.EMPLOYEES_UPDATE);

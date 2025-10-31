@@ -10,7 +10,8 @@ import { employeeSchema, EmployeeFormData } from "@/schemas/employeeSchema";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useToast } from "@/hooks/useToast";
 import { secureFormData } from "@/utils/form-security";
-import { useEmployees, Employee } from "@/hooks/useEmployees";
+import { Employee } from "@/hooks/useEmployees";
+import { useEmployeeMutations } from "@/hooks/useEmployeeMutations";
 import { supabase } from "@/lib/supabase";
 
 interface EmployeeFormProps {
@@ -21,7 +22,7 @@ interface EmployeeFormProps {
 export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
   const router = useRouter();
   const toast = useToast();
-  const { updateEmployee } = useEmployees(); // Rimossa createEmployee non usata
+  const { updateEmployee } = useEmployeeMutations();
   const { handleFormErrors, handleServerError } =
     useFormErrors<EmployeeFormData>();
 

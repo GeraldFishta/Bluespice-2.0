@@ -22,6 +22,7 @@ import {
   Error as ErrorIcon,
 } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
+import { useEmployeeMutations } from "@/hooks/useEmployeeMutations";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
@@ -35,7 +36,8 @@ interface TestResult {
 }
 
 export default function EmployeeTestPage() {
-  const { employees, isLoading, mutate, deleteEmployee } = useEmployees();
+  const { employees, isLoading, mutate } = useEmployees();
+  const { deleteEmployee } = useEmployeeMutations();
   const { hasAccess: canCreate } = usePermissions(PERMISSIONS.EMPLOYEES_CREATE);
   const { hasAccess: canUpdate } = usePermissions(PERMISSIONS.EMPLOYEES_UPDATE);
   const { hasAccess: canDelete } = usePermissions(PERMISSIONS.EMPLOYEES_DELETE);
