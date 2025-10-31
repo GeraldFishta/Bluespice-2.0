@@ -19,10 +19,10 @@ import {
   IconButton,
   Chip,
 } from "@mui/material";
-import { Add, Edit, Delete, Visibility, Search } from "@mui/icons-material";
+import { Add, Edit, Delete, Visibility } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { PERMISSIONS } from "@/lib/permissions";
+import { SearchBar } from "@/components/search";
 import {
   LoadingSpinner,
   AccessDenied,
@@ -34,16 +34,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export default function EmployeesPage() {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive" | "terminated"
   >("all");
 
-  // Debounce search input to avoid spamming queries
-  const debouncedSearch = useDebouncedValue(searchTerm, 300);
-
   const { employees, isLoading, error, deleteEmployee } = useEmployees({
-    search: debouncedSearch,
+    search: searchQuery,
     status: statusFilter,
   });
   const { hasAccess: canView } = usePermissions(PERMISSIONS.EMPLOYEES_VIEW);
@@ -59,20 +56,6 @@ export default function EmployeesPage() {
 
   if (!canView) {
     return <AccessDenied />;
-  }
-
-  if (isLoading) {
-    return <LoadingSpinner message="Loading employees..." />;
-  }
-
-  if (error) {
-    return (
-      <Box>
-        <Typography color="error">
-          Error loading employees: {error.message}
-        </Typography>
-      </Box>
-    );
   }
 
   // Data already filtered server-side via useEmployees params
@@ -122,16 +105,10 @@ export default function EmployeesPage() {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-          <TextField
+          <SearchBar
             placeholder="Search employees..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <Search sx={{ mr: 1, color: "text.secondary" }} />
-              ),
-            }}
-            sx={{ flexGrow: 1 }}
+            onSearch={setSearchQuery}
+            debounceMs={400}
           />
           <TextField
             select
@@ -152,6 +129,14 @@ export default function EmployeesPage() {
         </Stack>
       </Paper>
 
+      {error && (
+        <Box sx={{ mb: 2 }}>
+          <Typography color="error">
+            Error loading employees: {error.message}
+          </Typography>
+        </Box>
+      )}
+
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
@@ -168,7 +153,13 @@ export default function EmployeesPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredEmployees.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <LoadingSpinner message="Loading employees..." />
+                </TableCell>
+              </TableRow>
+            ) : filteredEmployees.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
