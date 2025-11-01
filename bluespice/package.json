@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "supabase:start": "supabase stop || echo && supabase start",
+    "supabase:stop": "supabase stop"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

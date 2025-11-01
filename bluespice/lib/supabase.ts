@@ -17,9 +17,7 @@ export type Database = {
                     first_name: string;
                     last_name: string;
                     role: 'admin' | 'hr' | 'employee';
-                    department: string | null;
-                    position: string | null;
-                    hire_date: string | null;
+                    // department, position, hire_date rimossi (ora sono in employees)
                     created_at: string;
                     updated_at: string;
                 };
@@ -29,18 +27,14 @@ export type Database = {
                     first_name: string;
                     last_name: string;
                     role: 'admin' | 'hr' | 'employee';
-                    department?: string | null;
-                    position?: string | null;
-                    hire_date?: string | null;
+                    // department, position, hire_date rimossi (ora sono in employees)
                 };
                 Update: {
                     email?: string;
                     first_name?: string;
                     last_name?: string;
                     role?: 'admin' | 'hr' | 'employee';
-                    department?: string | null;
-                    position?: string | null;
-                    hire_date?: string | null;
+                    // department, position, hire_date rimossi (ora sono in employees)
                 };
             };
             // ... altri tipi per employees, payroll_periods, etc.

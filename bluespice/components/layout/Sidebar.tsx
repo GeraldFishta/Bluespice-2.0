@@ -33,7 +33,9 @@ const iconMap: Record<string, React.ReactNode> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { role } = useAuth();
+  console.log("🔍 DEBUG - Current role:", role); // 👈 AGGIUNGI QUI
   const navItems = getNavigationItems(role);
+  console.log("🔍 DEBUG - Navigation items:", navItems); // 👈 E QUI
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
 
   const toggleItem = (path: string) => {

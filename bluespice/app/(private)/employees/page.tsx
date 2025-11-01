@@ -281,8 +281,8 @@ export default function EmployeesPage() {
                     {employee.profile?.first_name} {employee.profile?.last_name}
                   </TableCell>
                   <TableCell>{employee.profile?.email}</TableCell>
-                  <TableCell>{employee.profile?.department || "-"}</TableCell>
-                  <TableCell>{employee.profile?.position || "-"}</TableCell>
+                  <TableCell>{employee.department || "-"}</TableCell>
+                  <TableCell>{employee.position || "-"}</TableCell>
                   <TableCell>
                     <StatusChip
                       status={
