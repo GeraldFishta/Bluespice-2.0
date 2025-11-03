@@ -7,41 +7,28 @@ import {
   Button,
   Paper,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Stack,
   TextField,
   MenuItem,
   IconButton,
   Chip,
-  TableSortLabel,
   Pagination,
   Select,
   FormControl,
   InputLabel,
 } from "@mui/material";
-import {
-  Add,
-  Edit,
-  Delete,
-  Visibility,
-  ArrowUpward,
-  ArrowDownward,
-} from "@mui/icons-material";
+import { Add, Edit, Delete, Visibility } from "@mui/icons-material";
 import { useEmployees } from "@/hooks";
 import { useEmployeeMutations } from "@/hooks/useEmployeeMutations";
 import { PERMISSIONS } from "@/lib/permissions";
 import { SearchBar } from "@/components/search";
+import { AccessDenied, StatusChip, ConfirmDialog } from "@/components/common";
+import { DataTable } from "@/components/ui";
 import {
-  LoadingSpinner,
-  AccessDenied,
-  StatusChip,
-  ConfirmDialog,
-} from "@/components/common";
+  GridColDef,
+  GridRenderCellParams,
+  GridSortModel,
+} from "@mui/x-data-grid";
 import { formatCurrency } from "@/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -110,18 +97,6 @@ export default function EmployeesPage() {
     setEmployeeToDelete(null);
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      // Toggle direction if same field
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      // Set new field with default direction
-      setSortField(field);
-      setSortDirection("desc");
-    }
-    setPage(1); // Reset to first page on sort change
-  };
-
   const handlePageChange = (
     _event: React.ChangeEvent<unknown>,
     value: number
@@ -136,18 +111,135 @@ export default function EmployeesPage() {
     setPage(1); // Reset to first page on page size change
   };
 
+  const handleSortModelChange = (sortModel: GridSortModel) => {
+    if (sortModel.length > 0) {
+      const { field, sort } = sortModel[0];
+      setSortField(field as SortField);
+      setSortDirection(sort as SortDirection);
+      setPage(1); // Reset to first page on sort change
+    }
+  };
+
   // Calculate total pages
   const totalPages = total ? Math.ceil(total / pageSize) : 0;
 
-  // Sortable column configuration
-  const getSortIcon = (field: SortField) => {
-    if (sortField !== field) return null;
-    return sortDirection === "asc" ? (
-      <ArrowUpward fontSize="small" />
-    ) : (
-      <ArrowDownward fontSize="small" />
-    );
-  };
+  // DataTable column configuration
+  const columns: GridColDef[] = [
+    {
+      field: "employee_id",
+      headerName: "Employee ID",
+      width: 120,
+      sortable: true,
+    },
+    {
+      field: "name",
+      headerName: "Name",
+      width: 200,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">
+          {params.row.profile?.first_name} {params.row.profile?.last_name}
+        </Typography>
+      ),
+    },
+    {
+      field: "email",
+      headerName: "Email",
+      width: 250,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{params.row.profile?.email}</Typography>
+      ),
+    },
+    {
+      field: "department",
+      headerName: "Department",
+      width: 150,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{params.value || "-"}</Typography>
+      ),
+    },
+    {
+      field: "position",
+      headerName: "Position",
+      width: 150,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{params.value || "-"}</Typography>
+      ),
+    },
+    {
+      field: "status",
+      headerName: "Status",
+      width: 120,
+      renderCell: (params: GridRenderCellParams) => (
+        <StatusChip
+          status={
+            params.value === "active"
+              ? "active"
+              : params.value === "terminated"
+              ? "rejected"
+              : "inactive"
+          }
+        />
+      ),
+    },
+    {
+      field: "salary",
+      headerName: "Salary",
+      width: 120,
+      sortable: true,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{formatCurrency(params.value)}</Typography>
+      ),
+    },
+    {
+      field: "employment_type",
+      headerName: "Employment Type",
+      width: 150,
+      renderCell: (params: GridRenderCellParams) => (
+        <Chip label={params.value} size="small" variant="outlined" />
+      ),
+    },
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 150,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <IconButton
+            size="small"
+            onClick={() => router.push(`/employees/${params.row.id}`)}
+          >
+            <Visibility />
+          </IconButton>
+          {canUpdate && (
+            <IconButton
+              size="small"
+              onClick={() => router.push(`/employees/${params.row.id}/edit`)}
+            >
+              <Edit />
+            </IconButton>
+          )}
+          {canDelete && (
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() =>
+                handleDeleteClick({
+                  id: params.row.id,
+                  name:
+                    `${params.row.profile?.first_name || ""} ${
+                      params.row.profile?.last_name || ""
+                    }`.trim() || params.row.employee_id,
+                })
+              }
+            >
+              <Delete />
+            </IconButton>
+          )}
+        </Stack>
+      ),
+    },
+  ];
 
   return (
     <Box>
@@ -223,132 +315,21 @@ export default function EmployeesPage() {
         </Box>
       )}
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === "employee_id"}
-                  direction={
-                    sortField === "employee_id" ? sortDirection : "asc"
-                  }
-                  onClick={() => handleSort("employee_id")}
-                  IconComponent={() => getSortIcon("employee_id") || <></>}
-                >
-                  Employee ID
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Name</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Department</TableCell>
-              <TableCell>Position</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === "salary"}
-                  direction={sortField === "salary" ? sortDirection : "asc"}
-                  onClick={() => handleSort("salary")}
-                  IconComponent={() => getSortIcon("salary") || <></>}
-                >
-                  Salary
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Employment Type</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                  <LoadingSpinner message="Loading employees..." />
-                </TableCell>
-              </TableRow>
-            ) : filteredEmployees.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">
-                    No employees found
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredEmployees.map((employee) => (
-                <TableRow key={employee.id} hover>
-                  <TableCell>{employee.employee_id}</TableCell>
-                  <TableCell>
-                    {employee.profile?.first_name} {employee.profile?.last_name}
-                  </TableCell>
-                  <TableCell>{employee.profile?.email}</TableCell>
-                  <TableCell>{employee.department || "-"}</TableCell>
-                  <TableCell>{employee.position || "-"}</TableCell>
-                  <TableCell>
-                    <StatusChip
-                      status={
-                        employee.status === "active"
-                          ? "active"
-                          : employee.status === "terminated"
-                          ? "rejected"
-                          : "inactive"
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>{formatCurrency(employee.salary)}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={employee.employment_type}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <IconButton
-                        size="small"
-                        onClick={() => router.push(`/employees/${employee.id}`)}
-                      >
-                        <Visibility />
-                      </IconButton>
-                      {canUpdate && (
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            router.push(`/employees/${employee.id}/edit`)
-                          }
-                        >
-                          <Edit />
-                        </IconButton>
-                      )}
-                      {canDelete && (
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() =>
-                            handleDeleteClick({
-                              id: employee.id,
-                              name:
-                                `${employee.profile?.first_name || ""} ${
-                                  employee.profile?.last_name || ""
-                                }`.trim() || employee.employee_id,
-                            })
-                          }
-                        >
-                          <Delete />
-                        </IconButton>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataTable
+        rows={filteredEmployees}
+        columns={columns}
+        loading={isLoading}
+        pageSize={pageSize}
+        rowsPerPageOptions={[10, 20, 50, 100]}
+        autoHeight
+        emptyMessage="No employees found"
+        onSortModelChange={handleSortModelChange}
+        initialState={{
+          sorting: {
+            sortModel: [{ field: sortField, sort: sortDirection }],
+          },
+        }}
+      />
 
       {/* Pagination */}
       {total && total > 0 && (
