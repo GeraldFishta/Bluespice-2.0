@@ -44,15 +44,15 @@ export const navigationRegistry: Record<string, NavItem> = {
         permissions: ["admin", "hr"],
         order: 3,
         children: {
-            list: {
+            periods: {
                 path: "/payroll",
-                label: "Payroll Records",
+                label: "Payroll Periods",
                 permissions: ["admin", "hr"],
                 order: 1,
             },
-            generate: {
-                path: "/payroll/generate",
-                label: "Generate Payroll",
+            add: {
+                path: "/payroll/add",
+                label: "Add Payroll Period",
                 permissions: ["admin", "hr"],
                 order: 2,
             },
