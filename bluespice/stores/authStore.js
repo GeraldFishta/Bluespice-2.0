@@ -13,11 +13,11 @@ export const useAuthStore = create(
 
       // Actions
       setUser: (user) => {
-        const role = user?.user_metadata?.role || null;
         set({
           user,
           isAuthenticated: !!user,
-          role,
+          // Do not derive role from user_metadata; rely on DB-driven role elsewhere
+          role: get().role,
         });
       },
 

@@ -40,29 +40,97 @@ function extractNamesFromMetadata(user: User): {
   };
 }
 
-// Helper function to get user role (simple and clean)
+// Helper function to get user role (robust: id → email → create)
 async function getUserRole(user: User): Promise<string | null> {
   try {
-    // Single, clean fetch by auth user ID (now that we fixed the ID mismatch)
-    const { data: profile, error } = await supabase
+    console.log("🔍 getUserRole - User ID:", user.id, "Email:", user.email);
+
+    // 1) Try by ID first (normal case)
+    const { data: byId, error: idErr } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (error) {
-      console.warn("Error fetching user role:", error);
-      return null;
+    if (idErr) {
+      console.warn("❌ Role by ID error:", idErr);
     }
 
-    if (profile) {
-      return profile.role;
+    if (byId) {
+      console.log("✅ Found role by ID:", byId.role);
+
+      // 🔥 CRITICAL: Se trovato per ID ma è "employee", controlla per email se c'è un ruolo migliore
+      // Questo gestisce il caso in cui OAuth crea nuovo auth user ma profilo admin esiste già con stessa email
+      // Usa funzione RPC che bypassa RLS per trovare profili con stessa email
+      if (byId.role === "employee" && user.email) {
+        console.log(
+          "⚠️ Role by ID is 'employee', checking email for better role (bypassing RLS)..."
+        );
+        const { data: byEmail, error: emailErr } = await supabase.rpc(
+          "get_role_by_email",
+          { email_value: user.email }
+        );
+
+        if (emailErr) {
+          console.error("❌ Role by email RPC error:", emailErr);
+        } else if (byEmail && byEmail.length > 0) {
+          const profile = byEmail[0];
+          if (profile.role !== "employee" && profile.id !== user.id) {
+            console.log(
+              "✅ Found better role by email:",
+              profile.role,
+              "(profile ID:",
+              profile.id,
+              ")"
+            );
+            console.log(
+              "⚠️ ID mismatch detected - trigger should reconcile on next login"
+            );
+            return profile.role; // Usa il ruolo migliore trovato per email
+          } else if (profile.id === user.id) {
+            console.log("✅ Email profile matches ID, role:", profile.role);
+            return profile.role;
+          }
+        }
+      }
+
+      return byId.role;
     }
 
-    // If no profile found, create one (fallback for new users)
+    console.log("⚠️ No profile found by ID, trying email fallback...");
+
+    // 2) Fallback by email (reconciliation scenario - handles ID mismatch)
+    // Usa funzione RPC che bypassa RLS per trovare profili con stessa email
+    if (user.email) {
+      console.log("🔍 Fetching profile by email (bypassing RLS):", user.email);
+      const { data: byEmail, error: emailErr } = await supabase.rpc(
+        "get_role_by_email",
+        { email_value: user.email }
+      );
+
+      if (emailErr) {
+        console.error("❌ Role by email RPC error:", emailErr);
+      }
+
+      if (byEmail && byEmail.length > 0) {
+        const profile = byEmail[0];
+        console.log(
+          "✅ Found role by email:",
+          profile.role,
+          "(profile ID:",
+          profile.id,
+          ")"
+        );
+        return profile.role;
+      }
+
+      console.log("⚠️ No profile found by email either");
+    }
+
+    // 3) Last resort: create new profile if doesn't exist
+    console.log("⚠️ Creating new profile with default role 'employee'");
     const { first_name, last_name } = extractNamesFromMetadata(user);
-
-    const { data: newProfile, error: createError } = await supabase
+    const { data: created, error: createErr } = await supabase
       .from("profiles")
       .insert({
         id: user.id,
@@ -74,14 +142,15 @@ async function getUserRole(user: User): Promise<string | null> {
       .select("role")
       .single();
 
-    if (createError) {
-      console.warn("Failed to create profile:", createError);
+    if (createErr) {
+      console.error("❌ Create profile error:", createErr);
       return null;
     }
 
-    return newProfile?.role || "employee";
+    console.log("✅ Created new profile with role:", created?.role);
+    return created?.role || "employee";
   } catch (error) {
-    console.warn("Error getting user role:", error);
+    console.error("❌ Error getting user role:", error);
     return null;
   }
 }
