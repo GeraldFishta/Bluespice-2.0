@@ -1,4 +1,4 @@
-// app/(private)/payroll/[id]/page.tsx
+// app/(private)/payroll/[periodId]/page.tsx
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -10,23 +10,26 @@ import {
   Paper,
   Divider,
   Chip,
-  Grid,
 } from "@mui/material";
-import { Edit as EditIcon, ArrowBack as ArrowBackIcon } from "@mui/icons-material";
+import Grid from "@mui/material/Grid2";
+import {
+  Edit as EditIcon,
+  ArrowBack as ArrowBackIcon,
+} from "@mui/icons-material";
 import { usePayrollPeriod } from "@/hooks/usePayrollPeriods";
 import { PERMISSIONS } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/usePermissions";
-import { AccessDenied, LoadingSpinner, ErrorBoundary } from "@/components/common";
+import { AccessDenied, LoadingSpinner } from "@/components/common";
 
 export default function PayrollPeriodDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params.id as string;
+  const periodId = params.periodId as string;
 
-  const { payrollPeriod, isLoading, error } = usePayrollPeriod(id);
-  const { hasPermission } = usePermissions();
+  const { payrollPeriod, isLoading, error } = usePayrollPeriod(periodId);
+  const { hasAccess } = usePermissions(PERMISSIONS.PAYROLL_VIEW);
 
-  if (!hasPermission(PERMISSIONS.PAYROLL.VIEW)) {
+  if (!hasAccess) {
     return <AccessDenied />;
   }
 
@@ -105,7 +108,12 @@ export default function PayrollPeriodDetailPage() {
               <Typography variant="h4" component="h1">
                 {payrollPeriod.name}
               </Typography>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{ mt: 1 }}
+              >
                 <Chip
                   label={payrollPeriod.status}
                   color={getStatusColor(payrollPeriod.status)}
@@ -117,11 +125,11 @@ export default function PayrollPeriodDetailPage() {
             </Box>
           </Stack>
 
-          {hasPermission(PERMISSIONS.PAYROLL.UPDATE) && (
+          {hasAccess && (
             <Button
               variant="contained"
               startIcon={<EditIcon />}
-              onClick={() => router.push(`/payroll/${id}/edit`)}
+              onClick={() => router.push(`/payroll/${periodId}/edit`)}
             >
               Edit Period
             </Button>
@@ -137,7 +145,7 @@ export default function PayrollPeriodDetailPage() {
 
           <Grid container spacing={3}>
             {/* Date Range */}
-            <Grid item xs={12} sm={6}>
+            <Grid xs={12} sm={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 Start Date
               </Typography>
@@ -145,7 +153,7 @@ export default function PayrollPeriodDetailPage() {
                 {formatDate(payrollPeriod.start_date)}
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid xs={12} sm={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 End Date
               </Typography>
@@ -155,7 +163,7 @@ export default function PayrollPeriodDetailPage() {
             </Grid>
 
             {/* Financial Summary */}
-            <Grid item xs={12} sm={6}>
+            <Grid xs={12} sm={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 Total Gross
               </Typography>
@@ -163,7 +171,7 @@ export default function PayrollPeriodDetailPage() {
                 {formatCurrency(payrollPeriod.total_gross)}
               </Typography>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid xs={12} sm={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 Total Net
               </Typography>
@@ -173,7 +181,7 @@ export default function PayrollPeriodDetailPage() {
             </Grid>
 
             {/* Metadata */}
-            <Grid item xs={12} sm={6}>
+            <Grid xs={12} sm={6}>
               <Typography variant="subtitle2" color="text.secondary">
                 Created
               </Typography>
@@ -182,13 +190,14 @@ export default function PayrollPeriodDetailPage() {
               </Typography>
               {payrollPeriod.creator && (
                 <Typography variant="body2" color="text.secondary">
-                  by {payrollPeriod.creator.first_name} {payrollPeriod.creator.last_name}
+                  by {payrollPeriod.creator.first_name}{" "}
+                  {payrollPeriod.creator.last_name}
                 </Typography>
               )}
             </Grid>
 
             {payrollPeriod.processed_at && (
-              <Grid item xs={12} sm={6}>
+              <Grid xs={12} sm={6}>
                 <Typography variant="subtitle2" color="text.secondary">
                   Processed
                 </Typography>
@@ -199,7 +208,7 @@ export default function PayrollPeriodDetailPage() {
             )}
 
             {payrollPeriod.approved_at && (
-              <Grid item xs={12} sm={6}>
+              <Grid xs={12} sm={6}>
                 <Typography variant="subtitle2" color="text.secondary">
                   Approved
                 </Typography>
@@ -208,7 +217,8 @@ export default function PayrollPeriodDetailPage() {
                 </Typography>
                 {payrollPeriod.approver && (
                   <Typography variant="body2" color="text.secondary">
-                    by {payrollPeriod.approver.first_name} {payrollPeriod.approver.last_name}
+                    by {payrollPeriod.approver.first_name}{" "}
+                    {payrollPeriod.approver.last_name}
                   </Typography>
                 )}
               </Grid>
@@ -220,7 +230,11 @@ export default function PayrollPeriodDetailPage() {
             <>
               <Divider sx={{ my: 3 }} />
               <Box>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  gutterBottom
+                >
                   Description
                 </Typography>
                 <Typography variant="body1">

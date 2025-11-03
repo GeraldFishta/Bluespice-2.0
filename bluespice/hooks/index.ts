@@ -10,3 +10,5 @@ export { useEmployees, useEmployee } from "./useEmployees";
 export { useEmployeeMutations } from "./useEmployeeMutations";
 export { usePayrollPeriods, usePayrollPeriod } from "./usePayrollPeriods";
 export { usePayrollPeriodMutations } from "./usePayrollPeriodMutations";
+export { usePayrollRecords, usePayrollRecord } from "./usePayrollRecords";
+export { usePayrollRecordMutations } from "./usePayrollRecordMutations";

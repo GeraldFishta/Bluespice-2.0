@@ -5,6 +5,7 @@
 
 export { employeesCache } from "./employees";
 export { payrollCache } from "./payroll";
+export { payrollRecordsCache } from "./payrollRecords";
 export type { SWRKey, CacheKeyMatcher, InvalidationOptions } from "./types";
 export {
   isArrayKey,

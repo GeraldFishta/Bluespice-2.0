@@ -1,21 +1,22 @@
-// app/(private)/payroll/[id]/edit/page.tsx
+// app/(private)/payroll/[periodId]/records/[recordId]/edit/page.tsx
 "use client";
 import { useParams } from "next/navigation";
 import { Container, Box, Alert } from "@mui/material";
-import { PayrollPeriodForm } from "@/components/payroll";
-import { usePayrollPeriod } from "@/hooks/usePayrollPeriods";
+import { PayrollRecordForm } from "@/components/payroll";
+import { usePayrollRecord } from "@/hooks/usePayrollRecords";
 import { PERMISSIONS } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AccessDenied, LoadingSpinner } from "@/components/common";
 
-export default function EditPayrollPeriodPage() {
+export default function EditPayrollRecordPage() {
   const params = useParams();
-  const id = params.id as string;
+  const periodId = params.periodId as string;
+  const recordId = params.recordId as string;
 
-  const { payrollPeriod, isLoading, error } = usePayrollPeriod(id);
-  const { hasPermission } = usePermissions();
+  const { payrollRecord, isLoading, error } = usePayrollRecord(recordId);
+  const { hasAccess } = usePermissions(PERMISSIONS.PAYROLL_UPDATE);
 
-  if (!hasPermission(PERMISSIONS.PAYROLL.UPDATE)) {
+  if (!hasAccess) {
     return <AccessDenied />;
   }
 
@@ -34,19 +35,19 @@ export default function EditPayrollPeriodPage() {
       <Container maxWidth="md">
         <Box sx={{ py: 4 }}>
           <Alert severity="error">
-            Error loading payroll period: {error.message}
+            Error loading payroll record: {error.message}
           </Alert>
         </Box>
       </Container>
     );
   }
 
-  if (!payrollPeriod) {
+  if (!payrollRecord) {
     return (
       <Container maxWidth="md">
         <Box sx={{ py: 4 }}>
           <Alert severity="warning">
-            Payroll period not found
+            Payroll record not found
           </Alert>
         </Box>
       </Container>
@@ -54,12 +55,12 @@ export default function EditPayrollPeriodPage() {
   }
 
   // Prevent editing if already paid
-  if (payrollPeriod.status === "paid") {
+  if (payrollRecord.status === "paid") {
     return (
       <Container maxWidth="md">
         <Box sx={{ py: 4 }}>
           <Alert severity="info">
-            This payroll period has already been paid and cannot be edited.
+            This payroll record has already been paid and cannot be edited.
           </Alert>
         </Box>
       </Container>
@@ -69,7 +70,10 @@ export default function EditPayrollPeriodPage() {
   return (
     <Container maxWidth="md">
       <Box sx={{ py: 4 }}>
-        <PayrollPeriodForm payrollPeriod={payrollPeriod} />
+        <PayrollRecordForm
+          payrollRecord={payrollRecord}
+          payrollPeriodId={periodId}
+        />
       </Box>
     </Container>
   );

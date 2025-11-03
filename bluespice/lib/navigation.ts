@@ -50,11 +50,17 @@ export const navigationRegistry: Record<string, NavItem> = {
                 permissions: ["admin", "hr"],
                 order: 1,
             },
+            allRecords: {
+                path: "/payroll/all-records",
+                label: "All Records",
+                permissions: ["admin", "hr"],
+                order: 2,
+            },
             add: {
                 path: "/payroll/add",
                 label: "Add Payroll Period",
                 permissions: ["admin", "hr"],
-                order: 2,
+                order: 3,
             },
         },
     },
