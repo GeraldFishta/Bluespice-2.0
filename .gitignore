@@ -46,3 +46,4 @@ bluespice/out/
 bluespice/build/
 bluespice/.env*
 bluespice/*.tsbuildinfo
+bluespice/example(env).md

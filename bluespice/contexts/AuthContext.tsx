@@ -40,119 +40,49 @@ function extractNamesFromMetadata(user: User): {
   };
 }
 
-// Helper function to create profile if it doesn't exist
-async function ensureProfileExists(user: User): Promise<string | null> {
+// Helper function to get user role (simple and clean)
+async function getUserRole(user: User): Promise<string | null> {
   try {
-    console.log("🔍 DEBUG - Fetching profile for user:", user.id);
-
-    // STEP 1: Try to get profile by user ID (current auth user)
-    const { data: existingProfile, error: fetchError } = await supabase
+    // Single, clean fetch by auth user ID (now that we fixed the ID mismatch)
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
 
-    // STEP 2: Also check by email to reuse existing profile with better role
-    // This handles the case where OAuth creates new auth user but email already exists
-    let profileByEmail = null;
-    if (user.email) {
-      const { data: emailProfile, error: emailError } = await supabase
-        .from("profiles")
-        .select("role, id")
-        .eq("email", user.email)
-        .maybeSingle();
-
-      if (emailProfile && !emailError) {
-        profileByEmail = emailProfile;
-      }
+    if (error) {
+      console.warn("Error fetching user role:", error);
+      return null;
     }
 
-    // If we found profile by ID
-    if (existingProfile && !fetchError) {
-      // If we also found a profile by email with different/better role, prefer that
-      if (profileByEmail && profileByEmail.id !== user.id) {
-        console.log(
-          "🔍 DEBUG - Found profile by ID (role: " +
-            existingProfile.role +
-            "), but profile by email has different role (" +
-            profileByEmail.role +
-            "), using email profile role"
-        );
-        return profileByEmail.role;
-      }
-
-      console.log(
-        "🔍 DEBUG - Returning role from DB (by ID):",
-        existingProfile.role
-      );
-      return existingProfile.role;
+    if (profile) {
+      return profile.role;
     }
 
-    // If not found by ID but found by email, use email profile
-    if (profileByEmail) {
-      console.log(
-        "🔍 DEBUG - Profile not found by ID, but found by email, returning role:",
-        profileByEmail.role
-      );
-      return profileByEmail.role;
-    }
-
-    // STEP 3: Create new profile only if doesn't exist (by ID or email)
+    // If no profile found, create one (fallback for new users)
     const { first_name, last_name } = extractNamesFromMetadata(user);
-    const email = user.email || "";
 
     const { data: newProfile, error: createError } = await supabase
       .from("profiles")
       .insert({
         id: user.id,
-        email: email,
-        first_name: first_name,
-        last_name: last_name,
+        email: user.email || "",
+        first_name,
+        last_name,
         role: "employee",
       })
       .select("role")
       .single();
 
-    if (
-      createError?.code === "23505" ||
-      createError?.message?.includes("duplicate")
-    ) {
-      // If duplicate (id or email), try to fetch again by ID
-      const { data: fetchedProfile, error: fetchError2 } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (fetchedProfile && !fetchError2) {
-        return fetchedProfile.role;
-      }
-
-      // Last resort: try by email
-      if (user.email) {
-        const { data: fetchedByEmail } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("email", user.email)
-          .maybeSingle();
-
-        if (fetchedByEmail) {
-          return fetchedByEmail.role;
-        }
-      }
-
-      return (user.user_metadata?.role as string) || "employee";
-    }
-
     if (createError) {
       console.warn("Failed to create profile:", createError);
-      return (user.user_metadata?.role as string) || null;
+      return null;
     }
 
     return newProfile?.role || "employee";
   } catch (error) {
-    console.warn("Error ensuring profile exists:", error);
-    return (user.user_metadata?.role as string) || null;
+    console.warn("Error getting user role:", error);
+    return null;
   }
 }
 
@@ -187,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentUserIdRef.current = user.id;
 
       try {
-        const userRole = await ensureProfileExists(user);
+        const userRole = await getUserRole(user);
         if (mounted) {
           setRole(userRole);
         }
