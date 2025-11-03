@@ -21,6 +21,17 @@ export interface Employee {
     department: string | null;
     position: string | null;
     hire_date: string | null;
+    // ✅ NUOVI CAMPI PER PAYROLL
+    tax_code: string | null;
+    iban: string | null;
+    payment_method: string;
+    weekly_hours: number;
+    vacation_days: number;
+    sick_days: number;
+    contract_type: string | null;
+    badge_id: string | null;
+    office_phone: string | null;
+    extension: string | null;
     created_at: string;
     updated_at: string;
     // Joined with profiles (senza department, position, hire_date)

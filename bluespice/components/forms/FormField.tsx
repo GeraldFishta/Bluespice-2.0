@@ -32,6 +32,7 @@ interface FormFieldProps<T extends FieldValues> {
   rows?: number;
   disabled?: boolean;
   placeholder?: string;
+  inputProps?: Record<string, any>;
 }
 
 export function FormField<T extends FieldValues>({
@@ -45,6 +46,7 @@ export function FormField<T extends FieldValues>({
   rows = 4,
   disabled = false,
   placeholder,
+  inputProps,
 }: FormFieldProps<T>) {
   if (type === "select") {
     return (
@@ -90,6 +92,7 @@ export function FormField<T extends FieldValues>({
           placeholder={placeholder}
           error={!!error}
           helperText={error?.message}
+          inputProps={inputProps}
         />
       )}
     />

@@ -128,8 +128,21 @@ export default function EmployeesPage() {
     {
       field: "employee_id",
       headerName: "Employee ID",
-      width: 120,
+      width: 100,
       sortable: true,
+    },
+    {
+      field: "badge_id",
+      headerName: "Badge",
+      width: 80,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+        >
+          {params.value || "-"}
+        </Typography>
+      ),
     },
     {
       field: "name",
@@ -144,7 +157,7 @@ export default function EmployeesPage() {
     {
       field: "email",
       headerName: "Email",
-      width: 250,
+      width: 200,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.row.profile?.email}</Typography>
       ),
@@ -152,7 +165,7 @@ export default function EmployeesPage() {
     {
       field: "department",
       headerName: "Department",
-      width: 150,
+      width: 120,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.value || "-"}</Typography>
       ),
@@ -160,15 +173,38 @@ export default function EmployeesPage() {
     {
       field: "position",
       headerName: "Position",
-      width: 150,
+      width: 120,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.value || "-"}</Typography>
       ),
     },
     {
+      field: "contract_type",
+      headerName: "Contract",
+      width: 100,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
+          {params.value || "-"}
+        </Typography>
+      ),
+    },
+    {
+      field: "office_phone",
+      headerName: "Phone",
+      width: 120,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+        >
+          {params.value || "-"}
+        </Typography>
+      ),
+    },
+    {
       field: "status",
       headerName: "Status",
-      width: 120,
+      width: 100,
       renderCell: (params: GridRenderCellParams) => (
         <StatusChip
           status={
@@ -184,16 +220,18 @@ export default function EmployeesPage() {
     {
       field: "salary",
       headerName: "Salary",
-      width: 120,
+      width: 100,
       sortable: true,
       renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{formatCurrency(params.value)}</Typography>
+        <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
+          {formatCurrency(params.value)}
+        </Typography>
       ),
     },
     {
       field: "employment_type",
-      headerName: "Employment Type",
-      width: 150,
+      headerName: "Type",
+      width: 100,
       renderCell: (params: GridRenderCellParams) => (
         <Chip label={params.value} size="small" variant="outlined" />
       ),

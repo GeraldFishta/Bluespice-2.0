@@ -40,6 +40,17 @@ export async function POST(request: NextRequest) {
             position,
             role,
             hireDate,
+            // ✅ NUOVI CAMPI PER PAYROLL
+            taxCode,
+            iban,
+            paymentMethod,
+            weeklyHours,
+            vacationDays,
+            sickDays,
+            contractType,
+            badgeId,
+            officePhone,
+            extension,
         } = body;
 
         // Validate required fields
@@ -117,7 +128,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Step 4: Create employee record (con department, position, hire_date)
+        // Step 4: Create employee record (con department, position, hire_date + nuovi campi)
         const { data: employeeData, error: employeeError } = await supabaseAdmin
             .from("employees")
             .insert({
@@ -131,6 +142,17 @@ export async function POST(request: NextRequest) {
                 department: department || null,
                 position: position || null,
                 hire_date: hireDate ? new Date(hireDate).toISOString() : null,
+                // ✅ NUOVI CAMPI PER PAYROLL
+                tax_code: taxCode || null,
+                iban: iban || null,
+                payment_method: paymentMethod || "bank_transfer",
+                weekly_hours: weeklyHours ? parseFloat(weeklyHours) : 40.0,
+                vacation_days: vacationDays ? parseInt(vacationDays) : 26,
+                sick_days: sickDays ? parseInt(sickDays) : 0,
+                contract_type: contractType || null,
+                badge_id: badgeId || null,
+                office_phone: officePhone || null,
+                extension: extension || null,
             })
             .select()
             .single();

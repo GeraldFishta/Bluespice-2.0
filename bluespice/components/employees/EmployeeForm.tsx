@@ -52,6 +52,17 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
       position: employee?.position || "",
       role:
         (employee?.profile?.role as "admin" | "hr" | "employee") || "employee",
+      // ✅ NUOVI CAMPI PER PAYROLL
+      taxCode: employee?.tax_code || null,
+      iban: employee?.iban || null,
+      paymentMethod: employee?.payment_method || "bank_transfer",
+      weeklyHours: employee?.weekly_hours || 40.0,
+      vacationDays: employee?.vacation_days || 26,
+      sickDays: employee?.sick_days || 0,
+      contractType: employee?.contract_type || null,
+      badgeId: employee?.badge_id || null,
+      officePhone: employee?.office_phone || null,
+      extension: employee?.extension || null,
     },
   });
 
@@ -73,6 +84,17 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
         position: employee.position || "",
         role:
           (employee.profile?.role as "admin" | "hr" | "employee") || "employee",
+        // ✅ NUOVI CAMPI PER PAYROLL
+        taxCode: employee?.tax_code || null,
+        iban: employee?.iban || null,
+        paymentMethod: employee?.payment_method || "bank_transfer",
+        weeklyHours: employee?.weekly_hours || 40.0,
+        vacationDays: employee?.vacation_days || 26,
+        sickDays: employee?.sick_days || 0,
+        contractType: employee?.contract_type || null,
+        badgeId: employee?.badge_id || null,
+        officePhone: employee?.office_phone || null,
+        extension: employee?.extension || null,
       });
     }
   }, [employee, reset]);
@@ -120,6 +142,17 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
           hire_date: sanitizedData.hireDate
             ? new Date(sanitizedData.hireDate).toISOString()
             : null,
+          // ✅ NUOVI CAMPI PER PAYROLL
+          tax_code: sanitizedData.taxCode || null,
+          iban: sanitizedData.iban || null,
+          payment_method: sanitizedData.paymentMethod || "bank_transfer",
+          weekly_hours: sanitizedData.weeklyHours || 40.0,
+          vacation_days: sanitizedData.vacationDays || 26,
+          sick_days: sanitizedData.sickDays || 0,
+          contract_type: sanitizedData.contractType || null,
+          badge_id: sanitizedData.badgeId || null,
+          office_phone: sanitizedData.officePhone || null,
+          extension: sanitizedData.extension || null,
         });
 
         if (!result.success)
@@ -157,6 +190,17 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
               position: sanitizedData.position,
               role: sanitizedData.role,
               hireDate: sanitizedData.hireDate,
+              // ✅ NUOVI CAMPI PER PAYROLL
+              taxCode: sanitizedData.taxCode,
+              iban: sanitizedData.iban,
+              paymentMethod: sanitizedData.paymentMethod,
+              weeklyHours: sanitizedData.weeklyHours,
+              vacationDays: sanitizedData.vacationDays,
+              sickDays: sanitizedData.sickDays,
+              contractType: sanitizedData.contractType,
+              badgeId: sanitizedData.badgeId,
+              officePhone: sanitizedData.officePhone,
+              extension: sanitizedData.extension,
             }),
           });
 
@@ -331,6 +375,108 @@ export function EmployeeForm({ employee, onSuccess }: EmployeeFormProps) {
                 control={control}
                 label="Hourly Rate (EUR)"
                 type="number"
+              />
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Financial & Payment Information
+            </Typography>
+            <Stack spacing={2}>
+              <FormField<EmployeeFormData>
+                name="taxCode"
+                control={control}
+                label="Tax Code / Codice Fiscale"
+                type="text"
+                placeholder="RSSMRA85T10A562S"
+              />
+              <FormField<EmployeeFormData>
+                name="iban"
+                control={control}
+                label="IBAN"
+                type="text"
+                placeholder="IT60X0542811101000000123456"
+              />
+              <FormField<EmployeeFormData>
+                name="paymentMethod"
+                control={control}
+                label="Payment Method"
+                type="select"
+                options={[
+                  { value: "bank_transfer", label: "Bank Transfer" },
+                  { value: "check", label: "Check" },
+                  { value: "cash", label: "Cash" },
+                ]}
+              />
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Contract Details
+            </Typography>
+            <Stack spacing={2}>
+              <FormField<EmployeeFormData>
+                name="weeklyHours"
+                control={control}
+                label="Weekly Hours"
+                type="number"
+                inputProps={{ step: "0.5" }}
+              />
+              <FormField<EmployeeFormData>
+                name="vacationDays"
+                control={control}
+                label="Annual Vacation Days"
+                type="number"
+              />
+              <FormField<EmployeeFormData>
+                name="sickDays"
+                control={control}
+                label="Accumulated Sick Days"
+                type="number"
+              />
+              <FormField<EmployeeFormData>
+                name="contractType"
+                control={control}
+                label="Contract Type"
+                type="text"
+                placeholder="Indeterminato, Determinato, Apprendistato, etc."
+              />
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Access & Contact
+            </Typography>
+            <Stack spacing={2}>
+              <FormField<EmployeeFormData>
+                name="badgeId"
+                control={control}
+                label="Badge ID"
+                type="text"
+                placeholder="ABC123"
+              />
+              <FormField<EmployeeFormData>
+                name="officePhone"
+                control={control}
+                label="Office Phone"
+                type="text"
+                placeholder="+39 02 12345678"
+              />
+              <FormField<EmployeeFormData>
+                name="extension"
+                control={control}
+                label="Extension"
+                type="text"
+                placeholder="123"
               />
             </Stack>
           </Box>
