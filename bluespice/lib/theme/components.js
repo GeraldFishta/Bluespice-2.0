@@ -54,7 +54,7 @@ const components = (theme) => ({
     styleOverrides: {
       root: { border: "1px solid #e0e0e0", borderRadius: 8 },
       columnHeaders: { backgroundColor: "#f5f5f5", fontWeight: 600 },
-      cell: { alignItems: "center" },
+      cell: { alignItems: "center", display: "flex", alignContent: "center" },
       row: { "&:hover": { backgroundColor: "rgba(25, 118, 210, 0.04)" } },
     },
   },

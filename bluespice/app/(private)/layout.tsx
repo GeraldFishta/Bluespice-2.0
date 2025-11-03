@@ -45,7 +45,7 @@ export default function PrivateLayout({
           flexGrow: 1,
           p: 3,
           mt: 8,
-          ml: "240px",
+          ml: "0rem",
           minHeight: "100vh",
         }}
       >
