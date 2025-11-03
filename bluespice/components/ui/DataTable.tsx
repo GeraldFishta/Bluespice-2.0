@@ -1,10 +1,18 @@
 // components/ui/DataTable.tsx
 "use client";
-import { DataGrid, GridColDef, GridRowsProp } from "@mui/x-data-grid";
+import {
+  DataGrid,
+  DataGridProps,
+  GridColDef,
+  GridRowsProp,
+  GridRowParams,
+  GridValidRowModel,
+} from "@mui/x-data-grid";
 import { Box, Paper, Typography } from "@mui/material";
 import { LoadingSpinner } from "@/components/common";
 
-interface DataTableProps {
+interface DataTableProps
+  extends Omit<Partial<DataGridProps>, "pageSize" | "disableSelectionOnClick"> {
   rows: GridRowsProp;
   columns: GridColDef[];
   loading?: boolean;
@@ -14,9 +22,8 @@ interface DataTableProps {
   disableSelectionOnClick?: boolean;
   autoHeight?: boolean;
   height?: number | string;
-  onRowClick?: (params: any) => void;
+  onRowClick?: (params: GridRowParams<GridValidRowModel>) => void;
   emptyMessage?: string;
-  [key: string]: any; // Allow additional DataGrid props
 }
 
 export function DataTable({
@@ -33,18 +40,22 @@ export function DataTable({
   emptyMessage = "No data found",
   ...props
 }: DataTableProps) {
-  const hasData = rows && rows.length > 0;
-
   return (
     <Paper sx={{ height: autoHeight ? "auto" : height, width: "100%" }}>
       <DataGrid
         rows={rows}
         columns={columns}
         loading={loading}
-        pageSize={pageSize}
-        rowsPerPageOptions={rowsPerPageOptions}
+        initialState={{
+          pagination: {
+            paginationModel: {
+              pageSize,
+            },
+          },
+        }}
+        pageSizeOptions={rowsPerPageOptions}
         checkboxSelection={checkboxSelection}
-        disableSelectionOnClick={disableSelectionOnClick}
+        disableRowSelectionOnClick={disableSelectionOnClick}
         onRowClick={onRowClick}
         sx={{
           border: 0,
@@ -63,8 +74,8 @@ export function DataTable({
             outline: "none",
           },
         }}
-        components={{
-          LoadingOverlay: () => (
+        slots={{
+          loadingOverlay: () => (
             <Box
               sx={{
                 display: "flex",
@@ -76,7 +87,7 @@ export function DataTable({
               <LoadingSpinner />
             </Box>
           ),
-          NoRowsOverlay: () => (
+          noRowsOverlay: () => (
             <Box
               sx={{
                 display: "flex",
